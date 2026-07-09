@@ -14,7 +14,13 @@ import CanvasOverlayTools from './CanvasOverlayTools'
  *  - Registers imperative methods (addText/addImage/export/…) on the provider.
  */
 
-const MIN_PAD = 28 // breathing room between shape and white viewport edge
+// White margin between the print shape and the working-area edge. It must be
+// larger than the floating corner tools (undo/redo, zoom, edit, clear-all),
+// which sit 16px from the corner; the widest (zoom+edit stack) needs ~61px of
+// clearance (16px offset + 45px width), so the margin must exceed that. This
+// keeps every floating tool in the white gutter, never over the printable
+// canvas or a design placed near a corner — matching the reference.
+const MIN_PAD = 64
 
 export default function CanvasStage() {
   const { doc } = useEditorState()
