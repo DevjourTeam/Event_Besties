@@ -1,0 +1,67 @@
+/* ============================================================
+   Design Tokens — extracted from the Parties & Signs reference
+   Single source of truth for the editor's look & feel.
+   Everything reskins from these variables.
+   ============================================================ */
+
+:root {
+  /* ---- Brand / accent ---- */
+  --ps-gold:        #a98b52;   /* primary CTA — "Process" button, badges */
+  --ps-gold-hover:  #977a45;
+  --ps-gold-soft:   #f3eddf;   /* tinted gold background (icon wells) */
+
+  /* ---- Ink / text ---- */
+  --ps-ink:         #1b2333;   /* headings, primary text (near navy-black) */
+  --ps-ink-2:       #3a4252;   /* secondary text */
+  --ps-muted:       #9a9aa3;   /* subtitles, captions */
+  --ps-muted-2:     #b6b6bd;
+
+  /* ---- Surfaces ---- */
+  --ps-stage:       #e9e9ed;   /* editor container / canvas backdrop gray */
+  --ps-surface:     #ffffff;   /* cards, canvas, panels */
+  --ps-surface-2:   #f6f6f8;   /* subtle raised panels */
+  --ps-canvas-bg:   #ffffff;   /* the design canvas fill */
+
+  /* ---- Lines ---- */
+  --ps-border:      #e2e2e6;   /* card outlines, dividers */
+  --ps-border-2:    #d4d4da;
+  --ps-selection:   #e0563b;   /* red print/cut boundary outline */
+  --ps-handle:      #2b7fff;   /* selection handles */
+
+  /* ---- Radius ---- */
+  --ps-r-sm: 6px;
+  --ps-r:    10px;
+  --ps-r-lg: 14px;
+  --ps-r-pill: 999px;
+
+  /* ---- Shadow ---- */
+  --ps-shadow-sm: 0 1px 2px rgba(20, 25, 40, 0.05);
+  --ps-shadow:    0 2px 10px rgba(20, 25, 40, 0.08);
+  --ps-shadow-lg: 0 8px 28px rgba(20, 25, 40, 0.12);
+
+  /* ---- Typography ---- */
+  --ps-font-head: "Playfair Display", Georgia, serif;     /* big titles */
+  --ps-font-ui:   "Jost", "Segoe UI", system-ui, sans-serif; /* UI / body */
+
+  --ps-fs-xs:  12px;
+  --ps-fs-sm:  13px;
+  --ps-fs-md:  15px;
+  --ps-fs-lg:  18px;
+  --ps-fs-xl:  22px;
+
+  /* ---- Spacing scale ---- */
+  --ps-sp-1: 4px;
+  --ps-sp-2: 8px;
+  --ps-sp-3: 12px;
+  --ps-sp-4: 16px;
+  --ps-sp-5: 20px;
+  --ps-sp-6: 24px;
+
+  /* ---- Layout metrics (match reference) ---- */
+  --ps-sidebar-w:   300px;   /* left tool panel width */
+  --ps-topbar-h:    52px;
+  --ps-bottombar-h: 76px;
+
+  /* ---- Motion ---- */
+  --ps-ease: 0.15s ease;
+}

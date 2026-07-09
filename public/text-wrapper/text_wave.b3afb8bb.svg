@@ -1,0 +1,23 @@
+<svg width="580" height="361" xmlns="http://www.w3.org/2000/svg">
+ <!-- Created with Method Draw - http://github.com/duopixel/Method-Draw/ -->
+
+ <g>
+  <title>background</title>
+  <rect x="-1" y="-1" width="582" height="363" id="canvas_background" fill="#fff"/>
+  <g id="canvasGrid" width="100%" height="100%" x="0" y="0" overflow="visible" display="none">
+   <rect id="svg_2" width="100%" height="100%" x="0" y="0" stroke-width="0" fill="url(#gridpattern)"/>
+  </g>
+ </g>
+ <g>
+  <title>Layer 1</title>
+  <path id="svg_3" d="m166,224.9375" opacity="0.5" fill-opacity="null" stroke-opacity="null" stroke-width="0" stroke="#444444" fill="#666666"/>
+  <g stroke="null" id="svg_4">
+   <path stroke="null" id="svg_5" d="m169.760909,71.02485c63.350653,-1.115017 100.487238,35.475983 130.785378,73.051926l0,47.335323l0.569871,54.3029c-16.146341,-19.311739 -58.934137,-76.357544 -131.355232,-76.357544l-0.000017,-98.332614l0,0.000008z" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" fill="#7f86af"/>
+   <path stroke="null" id="svg_1" d="m173.180169,71.02485c-62.661856,-1.115017 -99.394665,35.475983 -129.363379,73.051926l0,47.335323l-0.563676,54.3029c15.970787,-19.311739 58.293362,-76.357544 129.927038,-76.357544l0.000017,-98.332614l0,0.000008z" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" fill="#7f86af"/>
+   <g stroke="null" id="svg_0h6a">
+    <path stroke="null" id="svg_az03" d="m405.971958,289.975311c-62.661862,1.108205 -99.394664,-35.259283 -129.36338,-72.605704l0,-47.04618l-0.563678,-53.971202c15.970785,19.193783 58.293363,75.891128 129.927039,75.891128l0.000019,97.731968l0,-0.00001z" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" fill="#7f86af"/>
+    <path stroke="null" id="svg_kht0" d="m405.391625,289.975311c63.350651,1.108205 100.487234,-35.259283 130.785369,-72.605704l0,-47.04618l0.569876,-53.971202c-16.146344,19.193783 -58.934137,75.891128 -131.355236,75.891128l-0.000009,97.731968l0,-0.00001z" stroke-linecap="null" stroke-linejoin="null" stroke-width="0" fill="#7f86af"/>
+   </g>
+  </g>
+ </g>
+</svg>
