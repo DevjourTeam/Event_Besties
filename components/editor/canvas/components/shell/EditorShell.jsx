@@ -7,18 +7,25 @@ import CanvasStage from './CanvasStage'
  *   [ tool sidebar ] [ top bar / canvas / bottom bar ]
  * inside the rounded gray stage container.
  */
-export default function EditorShell({ productTitle = 'Create Your Design', price }) {
+export default function EditorShell({
+  productTitle = 'Create Your Design',
+  price,
+  onProcess: onProcessProp,
+  onSave: onSaveProp,
+}) {
   const { doc } = useEditorState()
   const api = useEditorApi()
 
   const onProcess = async () => {
-    const png = await api.canvas.current.exportPNG()
-    // Phase 0: hand the print-res PNG back; real PNG+PDF upload wires in later.
+    // Cap the export edge when a host handler will POST it to the export API.
+    const png = await api.canvas.current.exportPNG(onProcessProp ? { maxEdge: 2400 } : {})
+    if (onProcessProp) return onProcessProp(png)
     console.log('Process → PNG data URL length:', png?.length)
   }
 
   const onSave = async () => {
-    const png = await api.canvas.current.save()
+    const png = await api.canvas.current.exportPNG(onSaveProp ? { maxEdge: 2400 } : {})
+    if (onSaveProp) return onSaveProp(png)
     console.log('Save Design → PNG data URL length:', png?.length)
   }
 

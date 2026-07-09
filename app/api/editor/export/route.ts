@@ -11,6 +11,8 @@ type ExportBody = {
   templateId: string;
   svgString?: string;
   fabricJSON?: unknown;
+  /** Canvas mode: a client-rendered print PNG data URL (WYSIWYG). Preferred. */
+  pngBase64?: string;
   canvasWidth?: number;
   canvasHeight?: number;
   displayW?: number;
@@ -55,14 +57,25 @@ export async function POST(req: Request) {
         body.canvasHeight ?? 1010,
         body.fonts
       );
-    } else {
-      if (!body.fabricJSON) {
-        return NextResponse.json({ error: "Missing fabricJSON" }, { status: 400 });
+    } else if (body.pngBase64) {
+      // Preferred canvas path: the editor already rendered the design to a
+      // print-resolution PNG on the client, so what the customer saw is exactly
+      // what prints. We just decode + upload it — no server-side re-render.
+      const b64 = body.pngBase64.replace(/^data:image\/\w+;base64,/, "");
+      pngBuffer = Buffer.from(b64, "base64");
+      if (!pngBuffer.length) {
+        return NextResponse.json({ error: "Empty pngBase64" }, { status: 400 });
       }
+    } else if (body.fabricJSON) {
       pngBuffer = await renderFabricJSON(
         body.fabricJSON,
         body.displayW ?? 600,
         body.displayH ?? 800
+      );
+    } else {
+      return NextResponse.json(
+        { error: "Missing pngBase64 or fabricJSON" },
+        { status: 400 }
       );
     }
 

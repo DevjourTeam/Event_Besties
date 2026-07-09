@@ -9,7 +9,17 @@ import {
   CreateProductModal,
   type CreateProductSuccess,
 } from "@/components/admin/CreateProductModal";
-import type { CanvasConfig } from "@/lib/types";
+import type { CanvasConfig, CanvasShape } from "@/lib/types";
+import { buildShapePath } from "@/components/editor/canvas/editor/shapes";
+
+const SHAPE_OPTIONS: { value: CanvasShape; label: string }[] = [
+  { value: "rect", label: "Rectangle" },
+  { value: "rounded", label: "Rounded rectangle" },
+  { value: "arch", label: "Arch (sailboard)" },
+  { value: "circle", label: "Circle" },
+  { value: "ellipse", label: "Ellipse" },
+  { value: "custom", label: "Custom SVG path" },
+];
 
 export function CanvasBuilderPanel() {
   const toast = useToast();
@@ -23,6 +33,9 @@ export function CanvasBuilderPanel() {
   const [displayW, setDisplayW] = useState(380);
   const [displayH, setDisplayH] = useState(500);
 
+  const [shape, setShape] = useState<CanvasShape>("rect");
+  const [shapePath, setShapePath] = useState("");
+
   const [modalOpen, setModalOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
@@ -30,7 +43,8 @@ export function CanvasBuilderPanel() {
     type: "canvas",
     templateId: `cnv_${Date.now().toString(36)}`,
     productName,
-    shape: "rect",
+    shape,
+    ...(shape === "custom" && shapePath.trim() ? { shapePath: shapePath.trim() } : {}),
     displayW,
     displayH,
     printWidthCm,
@@ -45,7 +59,7 @@ export function CanvasBuilderPanel() {
   const config: CanvasConfig = useMemo(
     () => buildConfig("Untitled Canvas", "£0"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [displayW, displayH, printWidthCm, printHeightCm, bleedPx, safePx]
+    [displayW, displayH, printWidthCm, printHeightCm, bleedPx, safePx, shape, shapePath]
   );
 
   const json = JSON.stringify(config, null, 2);
@@ -140,6 +154,39 @@ export function CanvasBuilderPanel() {
           </p>
         </Card>
 
+        <Card title="Product shape">
+          <label className="block">
+            <div className="text-[11px] text-text-muted mb-1">Cut shape</div>
+            <select
+              value={shape}
+              onChange={(e) => setShape(e.target.value as CanvasShape)}
+              className="w-full h-10 px-3 rounded-lg border border-card-border bg-form-surface text-[13px] focus:outline-none focus:ring-2 focus:ring-gold/40"
+            >
+              {SHAPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          {shape === "custom" && (
+            <label className="block">
+              <div className="text-[11px] text-text-muted mb-1">SVG path (d attribute)</div>
+              <textarea
+                value={shapePath}
+                onChange={(e) => setShapePath(e.target.value)}
+                placeholder="M 0 0 L 100 0 L 100 100 L 0 100 Z"
+                rows={4}
+                className="w-full px-3 py-2 rounded-lg border border-card-border bg-form-surface text-[11px] font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-gold/40 resize-y"
+              />
+              <p className="text-[10px] text-text-muted mt-1 leading-relaxed">
+                Paste the path from an SVG cutout. It is auto-scaled to the print box.
+              </p>
+            </label>
+          )}
+          <p className="text-[10px] text-text-muted leading-relaxed">
+            The shape is the printable area. Everything the customer designs is clipped to it.
+          </p>
+        </Card>
+
         <button
           type="button"
           onClick={() => setModalOpen(true)}
@@ -166,6 +213,8 @@ export function CanvasBuilderPanel() {
               displayH={displayH}
               bleedPx={bleedPx}
               safePx={safePx}
+              shape={shape}
+              shapePath={shapePath}
             />
           </div>
         </div>
@@ -212,17 +261,31 @@ function CanvasPreview({
   displayH,
   bleedPx,
   safePx,
+  shape,
+  shapePath,
 }: {
   displayW: number;
   displayH: number;
   bleedPx: number;
   safePx: number;
+  shape: CanvasShape;
+  shapePath: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Render at 55% of the configured display size so it always fits.
   const scale = 0.55;
   const w = Math.max(50, Math.round(displayW * scale));
   const h = Math.max(50, Math.round(displayH * scale));
+
+  // The product cut outline (same geometry the editor clips to).
+  const shapeD = useMemo(() => {
+    try {
+      const s = shape === "custom" ? { type: "custom", svgPath: shapePath } : { type: shape };
+      return buildShapePath(s, w, h);
+    } catch {
+      return `M 0 0 L ${w} 0 L ${w} ${h} L 0 ${h} Z`;
+    }
+  }, [shape, shapePath, w, h]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -256,6 +319,8 @@ function CanvasPreview({
         height={h}
         viewBox={`0 0 ${w} ${h}`}
       >
+        {/* product cut outline */}
+        <path d={shapeD} fill="rgba(169,139,82,0.06)" stroke="#a98b52" strokeWidth="1.6" />
         <rect
           x={bleedScaled}
           y={bleedScaled}

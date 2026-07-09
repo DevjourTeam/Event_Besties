@@ -30,11 +30,27 @@ export type TemplateConfig = {
   requiredFonts?: string[];
 };
 
+/**
+ * Product cut shape for a canvas. Named presets are generated geometrically by
+ * the editor (see editor/shapes.js); "custom" pairs with `shapePath`, an SVG
+ * path string that the editor scales to the print box. This is what lets any
+ * product cut (sailboard arch, circle sign, bear cutout) load — not just a rect.
+ */
+export type CanvasShape =
+  | "rect"
+  | "arch"
+  | "circle"
+  | "ellipse"
+  | "rounded"
+  | "custom";
+
 export type CanvasConfig = {
   type: "canvas";
   templateId: string;
   productName: string;
-  shape: "rect";
+  shape: CanvasShape;
+  /** SVG path string, used only when shape === "custom". */
+  shapePath?: string;
   displayW: number;
   displayH: number;
   printWidthCm: number;

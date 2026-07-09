@@ -293,10 +293,19 @@ export default function CanvasStage() {
           api.setHistory(undoStack.current.length > 1, redoStack.current.length > 0)
         })
       },
-      exportPNG: async () => {
+      exportPNG: async (opts = {}) => {
         // print-resolution multiplier: real pixels / on-screen pixels
-        const printW = (doc.sizeCm.w / 2.54) * doc.dpi
-        const multiplier = printW / (fabricRef.current?.getWidth() || printW)
+        const d = docRef.current
+        const curW = fabricRef.current?.getWidth() || 1
+        const curH = fabricRef.current?.getHeight() || 1
+        const printW = (d.sizeCm.w / 2.54) * d.dpi
+        let multiplier = printW / curW
+        // Optional cap on the longest exported edge — used when POSTing the PNG
+        // to the export API so the base64 body stays under serverless limits.
+        if (opts.maxEdge) {
+          const longest = Math.max(curW, curH) * multiplier
+          if (longest > opts.maxEdge) multiplier *= opts.maxEdge / longest
+        }
         return fc.toDataURL({ format: 'png', multiplier })
       },
       exportPDF: async () => {

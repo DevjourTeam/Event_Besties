@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import type { CanvasConfig } from "@/lib/types";
 
 // The custom editor is client-only (Fabric.js needs the DOM). Load it with
@@ -24,10 +25,21 @@ const CanvasEditorRoot = dynamic(() => import("./canvas/CanvasEditorRoot"), {
  * a full rectangle, matching the current builder output.
  */
 export function CustomCanvasEditor({ config }: { config: CanvasConfig }) {
+  // variantId arrives on the URL when opened from a Shopify product page; it is
+  // what the cart hand-off attaches the finished design to.
+  const variantId = useSearchParams().get("variantId") ?? "";
+
+  // Map the stored shape into the editor's doc.shape. A custom cut carries an
+  // svgPath; named presets (arch/circle/…) are generated geometrically.
+  const shape =
+    config.shape === "custom" && config.shapePath
+      ? { type: "path", svgPath: config.shapePath }
+      : { type: config.shape || "rect", svgPath: null };
+
   const doc = {
     id: config.templateId,
     name: config.productName,
-    shape: { type: "rect", svgPath: null },
+    shape,
     sizeCm: { w: config.printWidthCm, h: config.printHeightCm },
     dpi: 150,
     background: { type: "none", value: null },
@@ -39,6 +51,8 @@ export function CustomCanvasEditor({ config }: { config: CanvasConfig }) {
       doc={doc}
       productTitle={config.productName}
       price={config.price}
+      templateId={config.templateId}
+      variantId={variantId}
     />
   );
 }
