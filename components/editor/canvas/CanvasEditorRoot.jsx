@@ -7,6 +7,7 @@ import { preloadAllFonts } from './utils/fontLoader'
 import './styles/tokens.css'
 import './styles/nxicons.css'
 import './styles/shell.css'
+import './styles/embed.css'
 
 /**
  * CanvasEditorRoot — the custom "free canvas" designer, mounted inside the
@@ -23,8 +24,10 @@ export default function CanvasEditorRoot({ doc, productTitle, price }) {
   }, [])
 
   return (
-    <EditorProvider initialDoc={doc}>
-      <EditorShell productTitle={productTitle || 'Create Your Design'} price={price} />
-    </EditorProvider>
+    <div className="ps-embed-page">
+      <EditorProvider initialDoc={doc}>
+        <EditorShell productTitle={productTitle || 'Create Your Design'} price={price} />
+      </EditorProvider>
+    </div>
   )
 }

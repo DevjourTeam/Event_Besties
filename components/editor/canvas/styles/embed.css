@@ -1,0 +1,28 @@
+/* ============================================================
+   Host framing for the custom editor when mounted full-page in
+   the Next.js app (/editor/[productId], /editor/preview).
+
+   The editor's stage is a fixed 1200 x 834 rounded panel. This
+   wrapper centers it on the page, gives it breathing room, and
+   lets it scroll on windows smaller than the stage — so the
+   sidebar + canvas always read as one contained unit instead of
+   spilling edge-to-edge into the page.
+   Editor internals (shell.css) are untouched.
+   ============================================================ */
+.ps-embed-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: safe center;
+  justify-content: safe center;
+  padding: 28px;
+  overflow: auto;
+  background: #eef0f3;
+}
+
+@media (max-width: 760px) {
+  .ps-embed-page {
+    padding: 0;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
