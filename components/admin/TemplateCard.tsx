@@ -52,7 +52,7 @@ export function TemplateCard({ item, onPreview }: TemplateCardProps) {
       <div
         className="h-[180px] flex items-center justify-center p-3"
         style={{
-          background: svgUrl ? "#f8f5f0" : "#f4f1ea",
+          background: svgUrl ? "#f6f6f8" : "#f4f5f7",
         }}
       >
         {isTemplate && svgUrl ? (
@@ -77,7 +77,7 @@ export function TemplateCard({ item, onPreview }: TemplateCardProps) {
 
       <div className="px-5 pt-4 pb-3 flex-1">
         <div
-          className="text-[14px] font-medium text-[#1a1a1a] truncate"
+          className="text-[14px] font-medium text-[#1b2333] truncate"
           title={config.productName}
         >
           {config.productName}
@@ -119,7 +119,7 @@ function Badge({
     amber: "bg-[#fdf3e1] text-[#a06b1c] border-[#f1ddb3]",
     blue: "bg-[#e8f1fb] text-[#2a5b94] border-[#cbdcef]",
     green: "bg-[#e8f4ea] text-[#2a7a3c] border-[#c9e2cf]",
-    gray: "bg-[#eeece6] text-[#6a6050] border-[#dcd6c8]",
+    gray: "bg-[#eeece6] text-[#6b7385] border-[#dcd6c8]",
   };
   return (
     <span

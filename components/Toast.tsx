@@ -56,7 +56,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {items.map((t) => (
           <div
             key={t.id}
-            className="bg-[#1a1a1a] text-white text-[12px] px-5 py-[9px] rounded-lg shadow-lg pointer-events-auto max-w-[520px] flex items-center gap-3"
+            className="bg-[#1b2333] text-white text-[12px] px-5 py-[9px] rounded-lg shadow-lg pointer-events-auto max-w-[520px] flex items-center gap-3"
           >
             <span className="flex-1">{t.message}</span>
             {t.actions?.map((a, i) =>

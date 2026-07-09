@@ -53,7 +53,7 @@ export function EditorShell({
 
   if (tooSmall) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-cream text-[#1a1a1a] px-6 text-center">
+      <div className="fixed inset-0 flex items-center justify-center bg-cream text-[#1b2333] px-6 text-center">
         <div className="max-w-xs">
           <div className="font-serif-display italic text-[24px]">Event Besties</div>
           <p className="mt-4 text-[13px] text-text-muted leading-relaxed">
@@ -66,7 +66,7 @@ export function EditorShell({
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-cream text-[#1a1a1a]">
+    <div className="fixed inset-0 flex flex-col bg-cream text-[#1b2333]">
       {/* TOP BAR */}
       <header className="h-[52px] shrink-0 bg-white border-b border-card-border flex items-center px-6">
         <div className="w-[260px] text-[15px] font-semibold tracking-[0.01em]">
@@ -101,7 +101,7 @@ export function EditorShell({
         {processing && (
           <div className="absolute inset-0 z-40 bg-black/30 flex items-center justify-center">
             <div className="bg-white rounded-card shadow-xl px-6 py-5 flex items-center gap-4">
-              <span className="text-[#1a1a1a]">
+              <span className="text-[#1b2333]">
                 <Spinner size={22} />
               </span>
               <div>
@@ -132,7 +132,7 @@ export function EditorShell({
           </div>
         </div>
         <div className="flex-1" />
-        <div className="font-serif-display text-[20px] font-bold text-[#1a1a1a]">
+        <div className="font-serif-display text-[20px] font-bold text-[#1b2333]">
           {config.price}
         </div>
         <button
@@ -154,10 +154,10 @@ function StepDot({ active, label }: { active: boolean; label: string }) {
     <span className="inline-flex items-center gap-2">
       <span
         className={`w-2.5 h-2.5 rounded-full ${
-          active ? "bg-[#1a1a1a]" : "border border-text-muted"
+          active ? "bg-[#1b2333]" : "border border-text-muted"
         }`}
       />
-      <span className={active ? "text-[#1a1a1a]" : ""}>{label}</span>
+      <span className={active ? "text-[#1b2333]" : ""}>{label}</span>
     </span>
   );
 }

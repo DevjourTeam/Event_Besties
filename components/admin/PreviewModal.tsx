@@ -95,7 +95,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-4 right-4 z-10 w-8 h-8 inline-flex items-center justify-center rounded-md hover:bg-form-surface text-[#1a1a1a]"
+          className="absolute top-4 right-4 z-10 w-8 h-8 inline-flex items-center justify-center rounded-md hover:bg-form-surface text-[#1b2333]"
         >
           <XIcon size={18} />
         </button>
@@ -131,7 +131,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
         {/* Right detail panel — 58% */}
         <div className="basis-[58%] flex flex-col min-w-0">
           <div className="flex-1 overflow-y-auto px-7 pt-7 pb-4">
-            <h2 className="font-serif-display text-[22px] tracking-[0.04em] uppercase text-[#1a1a1a]">
+            <h2 className="font-serif-display text-[22px] tracking-[0.04em] uppercase text-[#1b2333]">
               {config.productName}
             </h2>
 
@@ -151,7 +151,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
                       className={`w-2 h-2 rounded-full ${
                         config.status === "published"
                           ? "bg-[#2a7a3c]"
-                          : "bg-[#8a8070]"
+                          : "bg-[#9a9aa3]"
                       }`}
                     />
                     {config.status === "published" ? "Published" : "Draft"}
@@ -190,7 +190,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
             <button
               type="button"
               onClick={reupload}
-              className="inline-flex items-center h-9 px-5 rounded-lg bg-[#1a1a1a] text-white text-[12px] hover:bg-black"
+              className="inline-flex items-center h-9 px-5 rounded-lg bg-[#1b2333] text-white text-[12px] hover:bg-[#10151f]"
             >
               Re-upload
             </button>
@@ -213,7 +213,7 @@ function DetailRow({
       <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
         {label}
       </div>
-      <div className="mt-1 text-[13px] text-[#1a1a1a]">{value}</div>
+      <div className="mt-1 text-[13px] text-[#1b2333]">{value}</div>
     </div>
   );
 }

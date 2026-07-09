@@ -64,7 +64,7 @@ export function PermissionEditor({ elements, permissions, onChange }: Props) {
           >
             <div className="flex items-center gap-2">
               <TagBadge tag={el.tagName} isText={el.isText} />
-              <code className="text-[11px] text-[#1a1a1a] font-mono truncate">
+              <code className="text-[11px] text-[#1b2333] font-mono truncate">
                 #{el.id}
               </code>
             </div>

@@ -1,6 +1,6 @@
 export default function EditorNotFound() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-cream text-[#1a1a1a] px-6 text-center">
+    <div className="fixed inset-0 flex items-center justify-center bg-cream text-[#1b2333] px-6 text-center">
       <div className="max-w-sm">
         <div className="font-serif-display italic text-[28px]">Event Besties</div>
         <div className="mt-2 text-[10px] tracking-[0.18em] uppercase text-text-muted">

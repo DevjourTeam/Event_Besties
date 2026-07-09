@@ -35,7 +35,7 @@ export function SVGUploader({ onLoaded }: Props) {
       <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white border border-card-border text-text-muted">
         <UploadCloudIcon size={22} />
       </div>
-      <div className="mt-3 text-[14px] font-medium text-[#1a1a1a]">
+      <div className="mt-3 text-[14px] font-medium text-[#1b2333]">
         Click to upload SVG
       </div>
       <div className="mt-1 text-[11px] text-text-muted">

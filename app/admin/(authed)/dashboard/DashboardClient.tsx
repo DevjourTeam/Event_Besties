@@ -56,7 +56,7 @@ export function DashboardClient({ items, source }: Props) {
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
         <div>
-          <h1 className="font-serif-display text-[26px] sm:text-[30px] lg:text-[34px] leading-tight text-[#1a1a1a]">
+          <h1 className="font-serif-display text-[26px] sm:text-[30px] lg:text-[34px] leading-tight text-[#1b2333]">
             Templates &amp; Canvases
           </h1>
           <p className="mt-1 text-[13px] text-text-muted">
@@ -72,7 +72,7 @@ export function DashboardClient({ items, source }: Props) {
           </Link>
           <Link
             href="/admin/builder?tab=canvas"
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1a1a1a] text-white text-[13px] hover:bg-black"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1b2333] text-white text-[13px] hover:bg-[#10151f]"
           >
             <PlusIcon size={15} /> New Canvas
           </Link>
@@ -143,7 +143,7 @@ export function DashboardClient({ items, source }: Props) {
                 No {tab === "templates" ? "templates" : "canvases"} yet — create one from the{" "}
                 <Link
                   href={tab === "templates" ? "/admin/builder?tab=svg" : "/admin/builder?tab=canvas"}
-                  className="underline hover:text-[#1a1a1a]"
+                  className="underline hover:text-[#1b2333]"
                 >
                   builder
                 </Link>
@@ -178,12 +178,12 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={`relative pb-3 text-[13px] tracking-[0.02em] transition-colors ${
-        active ? "text-[#1a1a1a]" : "text-text-muted hover:text-[#1a1a1a]"
+        active ? "text-[#1b2333]" : "text-text-muted hover:text-[#1b2333]"
       }`}
     >
       {children}
       {active && (
-        <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#1a1a1a]" />
+        <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#1b2333]" />
       )}
     </button>
   );

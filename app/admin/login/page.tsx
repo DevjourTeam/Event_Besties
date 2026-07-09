@@ -20,7 +20,7 @@ export default async function LoginPage({
     <div className="min-h-screen flex items-center justify-center bg-cream">
       <div className="w-full max-w-[400px] bg-white border border-card-border rounded-card shadow-sm px-8 pt-9 pb-8">
         <div className="text-center">
-          <div className="font-serif-display italic text-[26px] text-[#1a1a1a]">
+          <div className="font-serif-display italic text-[26px] text-[#1b2333]">
             Event Besties
           </div>
           <div className="mt-1 text-[10px] tracking-[0.18em] uppercase text-text-muted">
@@ -33,7 +33,7 @@ export default async function LoginPage({
             <input type="hidden" name="callbackUrl" value={callbackUrl} />
             <button
               type="submit"
-              className="w-full inline-flex items-center justify-center gap-3 h-11 rounded-lg border border-card-border bg-white hover:bg-form-surface text-[14px] font-medium text-[#1a1a1a]"
+              className="w-full inline-flex items-center justify-center gap-3 h-11 rounded-lg border border-card-border bg-white hover:bg-form-surface text-[14px] font-medium text-[#1b2333]"
             >
               <GoogleIcon size={18} />
               Sign in with Google

@@ -305,7 +305,7 @@ export function SvgBuilderPanel() {
                 type="button"
                 onClick={previewInEditor}
                 disabled={!previewConfig}
-                className="inline-flex items-center h-8 px-3 rounded-md bg-[#1a1a1a] text-white text-[11px] hover:bg-black disabled:opacity-50"
+                className="inline-flex items-center h-8 px-3 rounded-md bg-[#1b2333] text-white text-[11px] hover:bg-black disabled:opacity-50"
               >
                 Preview in Editor
               </button>

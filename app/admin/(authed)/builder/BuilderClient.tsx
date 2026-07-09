@@ -25,7 +25,7 @@ export function BuilderClient() {
         <div className="flex items-center gap-3">
           <Link
             href="/admin/dashboard"
-            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-card-border bg-white hover:bg-form-surface text-[#1a1a1a]"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-card-border bg-white hover:bg-form-surface text-[#1b2333]"
             aria-label="Back to dashboard"
           >
             <svg
@@ -42,7 +42,7 @@ export function BuilderClient() {
             </svg>
           </Link>
           <div>
-            <h1 className="font-serif-display text-[28px] leading-tight text-[#1a1a1a]">
+            <h1 className="font-serif-display text-[28px] leading-tight text-[#1b2333]">
               Template Builder
             </h1>
             <p className="text-[12px] text-text-muted">
@@ -83,8 +83,8 @@ function TabPill({
       onClick={onClick}
       className={`h-9 px-4 rounded-lg text-[12px] border transition-colors ${
         active
-          ? "bg-[#1a1a1a] text-white border-[#1a1a1a]"
-          : "bg-white text-[#1a1a1a] border-card-border hover:bg-form-surface"
+          ? "bg-[#1b2333] text-white border-[#1b2333]"
+          : "bg-white text-[#1b2333] border-card-border hover:bg-form-surface"
       }`}
     >
       {children}

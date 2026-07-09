@@ -111,7 +111,7 @@ function IconButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className={`w-7 h-7 inline-flex items-center justify-center rounded-md text-[#1a1a1a] ${
+      className={`w-7 h-7 inline-flex items-center justify-center rounded-md text-[#1b2333] ${
         disabled
           ? "opacity-40 cursor-not-allowed pointer-events-none"
           : "hover:bg-black/5"

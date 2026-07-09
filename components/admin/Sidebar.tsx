@@ -17,26 +17,26 @@ export function Sidebar({ email, storeDomain, signOutAction }: SidebarProps) {
     : "dashboard";
 
   return (
-    <aside className="w-[60px] lg:w-[252px] shrink-0 bg-sidebar text-[#f5f0e8] flex flex-col h-screen sticky top-0">
+    <aside className="w-[60px] lg:w-[252px] shrink-0 bg-sidebar text-[#eef0f3] flex flex-col h-screen sticky top-0">
       {/* Brand: full text on lg+, mark only below */}
       <div className="px-3 lg:px-6 pt-5 lg:pt-7 pb-4 lg:pb-5 flex items-center justify-center lg:justify-start">
         <div className="hidden lg:block">
           <div
             className="text-[22px] italic font-serif-display leading-none"
-            style={{ color: "#f5f0e8" }}
+            style={{ color: "#eef0f3" }}
           >
             Event Besties
           </div>
           <div
             className="mt-2 text-[10px] tracking-[0.18em]"
-            style={{ color: "#6a6050" }}
+            style={{ color: "#6b7385" }}
           >
             ADMIN DASHBOARD
           </div>
         </div>
         <div
           className="lg:hidden text-[18px] italic font-serif-display"
-          style={{ color: "#f5f0e8" }}
+          style={{ color: "#eef0f3" }}
           title="Event Besties"
         >
           EB
@@ -61,11 +61,11 @@ export function Sidebar({ email, storeDomain, signOutAction }: SidebarProps) {
       </nav>
 
       <div className="px-3 lg:px-6 py-4 lg:py-5 border-t border-white/[0.06] text-[11px] space-y-1">
-        <div className="hidden lg:block" style={{ color: "#8a8070" }}>
+        <div className="hidden lg:block" style={{ color: "#9a9aa3" }}>
           {storeDomain}
         </div>
         {email && (
-          <div className="hidden lg:block truncate" style={{ color: "#c0b8a8" }}>
+          <div className="hidden lg:block truncate" style={{ color: "#aab2c2" }}>
             {email}
           </div>
         )}
@@ -73,7 +73,7 @@ export function Sidebar({ email, storeDomain, signOutAction }: SidebarProps) {
           <button
             type="submit"
             className="mt-2 w-full inline-flex items-center gap-2 text-[12px] hover:text-gold transition-colors justify-center lg:justify-start"
-            style={{ color: "#c0b8a8" }}
+            style={{ color: "#aab2c2" }}
             title="Sign out"
           >
             <SignOutIcon size={14} />
@@ -105,7 +105,7 @@ function NavLink({
           ? "bg-white/[0.07] border-l-[3px] border-gold lg:pl-[21px]"
           : "border-l-[3px] border-transparent hover:bg-white/[0.04]"
       }`}
-      style={{ color: active ? "#f5f0e8" : "#c0b8a8" }}
+      style={{ color: active ? "#eef0f3" : "#aab2c2" }}
     >
       <span className="opacity-90">{icon}</span>
       <span className="hidden lg:inline">{label}</span>

@@ -132,7 +132,7 @@ export function CreateProductModal({ open, onClose, onSubmit }: Props) {
       <div className="w-full max-w-[520px] bg-white rounded-card shadow-2xl border border-card-border p-6 space-y-5">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[16px] font-semibold text-[#1a1a1a]">
+            <div className="text-[16px] font-semibold text-[#1b2333]">
               Create Shopify product
             </div>
             <div className="text-[11px] text-text-muted mt-0.5">
@@ -208,7 +208,7 @@ export function CreateProductModal({ open, onClose, onSubmit }: Props) {
                   <button
                     type="button"
                     onClick={() => handleFile(null)}
-                    className="text-[11px] text-text-muted hover:text-[#1a1a1a]"
+                    className="text-[11px] text-text-muted hover:text-[#1b2333]"
                   >
                     remove
                   </button>
@@ -233,7 +233,7 @@ export function CreateProductModal({ open, onClose, onSubmit }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="h-10 px-4 rounded-lg border border-card-border bg-white text-[12px] text-[#1a1a1a] hover:bg-form-surface disabled:opacity-50"
+            className="h-10 px-4 rounded-lg border border-card-border bg-white text-[12px] text-[#1b2333] hover:bg-form-surface disabled:opacity-50"
           >
             Cancel
           </button>

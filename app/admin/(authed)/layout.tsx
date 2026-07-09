@@ -19,7 +19,7 @@ export default async function AdminLayout({
 
   return (
     <ToastProvider>
-      <div className="min-h-screen flex bg-cream text-[#1a1a1a]">
+      <div className="min-h-screen flex bg-cream text-[#1b2333]">
         <Sidebar
           email={email}
           storeDomain={storeDomain}

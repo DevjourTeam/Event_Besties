@@ -235,7 +235,7 @@ export function CanvasBuilderPanel() {
               <button
                 type="button"
                 onClick={previewInEditor}
-                className="inline-flex items-center h-8 px-3 rounded-md bg-[#1a1a1a] text-white text-[11px] hover:bg-black"
+                className="inline-flex items-center h-8 px-3 rounded-md bg-[#1b2333] text-white text-[11px] hover:bg-[#10151f]"
               >
                 Preview in Editor
               </button>
@@ -301,7 +301,7 @@ function CanvasPreview({
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = "#e5e0d8";
+    ctx.strokeStyle = "#e2e2e6";
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
   }, [w, h]);

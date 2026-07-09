@@ -55,7 +55,7 @@ function Row({
   detail?: string;
 }) {
   const colors = {
-    ok: { dot: "bg-[#2a7a3c]", text: "text-[#1a1a1a]" },
+    ok: { dot: "bg-[#2a7a3c]", text: "text-[#1b2333]" },
     warn: { dot: "bg-[#a06b1c]", text: "text-[#a06b1c]" },
     error: { dot: "bg-[#a83232]", text: "text-[#a83232]" },
   }[tone];

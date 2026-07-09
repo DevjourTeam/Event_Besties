@@ -7,14 +7,14 @@ html, body {
 }
 
 body {
-  background: #f0ede5;
-  color: #1a1a1a;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #f4f5f7;
+  color: #1b2333;
+  font-family: var(--font-jost), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 @layer utilities {
   .font-serif-display {
-    font-family: Georgia, serif;
+    font-family: var(--font-playfair), Georgia, serif;
   }
 }
