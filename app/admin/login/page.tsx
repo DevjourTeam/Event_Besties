@@ -21,59 +21,42 @@ export default async function LoginPage({
   const error = params.error;
 
   return (
-    <div className="min-h-screen w-full lg:grid lg:grid-cols-[1.15fr_0.85fr]">
-      {/* ---------- LEFT: composited event hero (photo + logo baked in) ---------- */}
+    <div
+      className="relative min-h-screen w-full overflow-hidden"
+      style={{
+        backgroundColor: "#14060f",
+        backgroundImage: "url('/login-hero.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      {/* soft scrim: keeps the left logo clear, gently darkens the card side */}
       <div
-        className="relative hidden lg:block overflow-hidden"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundColor: "#14060f",
-          // The hero image is listed first so it sits ON TOP when present. If it
-          // is missing, the layered pink glows below still read as intentional.
-          // Anchored left so the baked-in logo is never cropped by cover-scaling.
-          backgroundImage:
-            "url('/login-hero.png'), radial-gradient(circle at 32% 34%, rgba(230,70,150,0.30), transparent 55%), radial-gradient(circle at 78% 72%, rgba(120,20,80,0.32), transparent 60%)",
-          backgroundSize: "cover, cover, cover",
-          backgroundPosition: "left center",
+          background:
+            "linear-gradient(90deg, rgba(8,4,8,0.30) 0%, rgba(8,4,8,0.04) 38%, rgba(8,4,8,0.18) 68%, rgba(8,4,8,0.55) 100%)",
         }}
-      >
-        {/* grain texture */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.06] mix-blend-soft-light"
-          style={{ backgroundImage: GRAIN }}
-        />
-        {/* bottom shade so the tagline stays legible over any photo */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent" />
+      />
+      {/* grain texture */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.05] mix-blend-soft-light"
+        style={{ backgroundImage: GRAIN }}
+      />
 
-        {/* tagline (logo already lives in the hero image) */}
-        <div className="absolute left-12 bottom-12 right-12">
-          <p className="text-[15px] text-white/75 max-w-md leading-relaxed">
-            Custom signs, boards &amp; cutouts for every celebration — designed
-            and published from your studio.
-          </p>
-        </div>
+      {/* tagline, bottom-left */}
+      <div className="absolute left-10 bottom-10 right-10 hidden lg:block pointer-events-none">
+        <p className="text-[15px] text-white/75 max-w-md leading-relaxed">
+          Custom signs, boards &amp; cutouts for every celebration — designed and
+          published from your studio.
+        </p>
       </div>
 
-      {/* ---------- RIGHT: sign-in ---------- */}
-      <div className="relative min-h-screen flex items-center justify-center bg-cream px-6 py-14 overflow-hidden">
-        {/* soft brand-pink glow ties this side to the hero */}
-        <div
-          className="pointer-events-none absolute -top-32 -right-24 w-[460px] h-[460px] rounded-full opacity-50 blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(230,70,150,0.18), transparent 70%)" }}
-        />
-        <div
-          className="pointer-events-none absolute -bottom-40 -left-24 w-[420px] h-[420px] rounded-full opacity-40 blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(169,139,82,0.16), transparent 70%)" }}
-        />
-
-        <div className="relative w-full max-w-[400px]">
-          {/* logo above the card on mobile (hero hidden there) */}
-          <div className="flex justify-center lg:hidden mb-8">
-            <img src="/event-besties-logo.png" alt="Event Besties" className="h-14 w-auto" />
-          </div>
-
-          <div className="bg-white border border-card-border rounded-[20px] shadow-[0_24px_60px_rgba(20,25,40,0.16)] px-9 pt-10 pb-9">
-            {/* full-colour logo inside the card on desktop */}
-            <div className="hidden lg:flex justify-center mb-7">
+      {/* sign-in card, floated to the right */}
+      <div className="relative min-h-screen flex items-center justify-center lg:justify-end px-6 lg:pr-24 py-14">
+        <div className="w-full max-w-[400px]">
+          <div className="bg-white/95 backdrop-blur-sm border border-white/60 rounded-[20px] shadow-[0_28px_70px_rgba(0,0,0,0.45)] px-9 pt-10 pb-9">
+            <div className="flex justify-center mb-7">
               <img src="/event-besties-logo.png" alt="Event Besties" className="h-11 w-auto" />
             </div>
 
@@ -81,7 +64,6 @@ export default async function LoginPage({
               <div className="font-serif-display text-[25px] text-ink leading-none">
                 Welcome back
               </div>
-              {/* brand-pink accent underline */}
               <div
                 className="mx-auto mt-3 h-[3px] w-10 rounded-full"
                 style={{ background: "linear-gradient(90deg,#e6469b,#a98b52)" }}
@@ -112,10 +94,6 @@ export default async function LoginPage({
               Only Gmail addresses listed in <code>ADMIN_ALLOWED_EMAILS</code> can sign in.
             </p>
           </div>
-
-          <p className="mt-6 text-center text-[11px] text-text-muted">
-            Event Besties · Design Studio
-          </p>
         </div>
       </div>
     </div>
