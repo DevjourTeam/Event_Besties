@@ -7,6 +7,10 @@ async function googleSignInAction(formData: FormData) {
   await signIn("google", { redirectTo: callbackUrl });
 }
 
+// Subtle film grain so the hero never looks like a flat wash.
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")";
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -17,67 +21,72 @@ export default async function LoginPage({
   const error = params.error;
 
   return (
-    <div className="min-h-screen w-full lg:grid lg:grid-cols-[1.05fr_0.95fr]">
-      {/* ---------- LEFT: event hero ---------- */}
+    <div className="min-h-screen w-full lg:grid lg:grid-cols-[1.15fr_0.85fr]">
+      {/* ---------- LEFT: composited event hero (photo + logo baked in) ---------- */}
       <div
-        className="relative hidden lg:flex flex-col justify-between overflow-hidden"
+        className="relative hidden lg:block overflow-hidden"
         style={{
-          backgroundColor: "#180a16",
-          // Overlay gradient sits ON TOP of the photo for text contrast; if
-          // /login-bg.jpg is missing, the magenta-night gradient still looks rich.
+          backgroundColor: "#14060f",
+          // The hero image is listed first so it sits ON TOP when present. If it
+          // is missing, the layered pink glows below still read as intentional.
+          // Anchored left so the baked-in logo is never cropped by cover-scaling.
           backgroundImage:
-            "linear-gradient(155deg, rgba(18,7,18,0.55) 0%, rgba(150,25,95,0.34) 45%, rgba(12,5,14,0.82) 100%), url('/login-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+            "url('/login-hero.png'), radial-gradient(circle at 32% 34%, rgba(230,70,150,0.30), transparent 55%), radial-gradient(circle at 78% 72%, rgba(120,20,80,0.32), transparent 60%)",
+          backgroundSize: "cover, cover, cover",
+          backgroundPosition: "left center",
         }}
       >
-        {/* soft pink glow accent */}
+        {/* grain texture */}
         <div
-          className="pointer-events-none absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full opacity-40 blur-3xl"
-          style={{ background: "radial-gradient(circle, #e6469b 0%, transparent 70%)" }}
+          className="pointer-events-none absolute inset-0 opacity-[0.06] mix-blend-soft-light"
+          style={{ backgroundImage: GRAIN }}
         />
+        {/* bottom shade so the tagline stays legible over any photo */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent" />
 
-        {/* top: white logo */}
-        <div className="relative p-12">
-          <img
-            src="/event-besties-logo.png"
-            alt="Event Besties"
-            className="h-11 w-auto"
-            style={{ filter: "brightness(0) invert(1)" }}
-          />
-        </div>
-
-        {/* bottom: tagline */}
-        <div className="relative p-12 pb-16">
-          <h1 className="font-serif-display text-white text-[42px] leading-[1.1] max-w-md">
-            Design the moment.
-          </h1>
-          <p className="mt-4 text-[15px] text-white/70 max-w-md leading-relaxed">
-            Custom signs, boards and cutouts for every celebration — created and
-            published from your studio.
+        {/* tagline (logo already lives in the hero image) */}
+        <div className="absolute left-12 bottom-12 right-12">
+          <p className="text-[15px] text-white/75 max-w-md leading-relaxed">
+            Custom signs, boards &amp; cutouts for every celebration — designed
+            and published from your studio.
           </p>
         </div>
       </div>
 
       {/* ---------- RIGHT: sign-in ---------- */}
-      <div className="relative min-h-screen flex items-center justify-center bg-cream px-6 py-14">
-        <div className="w-full max-w-[400px]">
-          {/* logo above card on mobile (hero is hidden there) */}
+      <div className="relative min-h-screen flex items-center justify-center bg-cream px-6 py-14 overflow-hidden">
+        {/* soft brand-pink glow ties this side to the hero */}
+        <div
+          className="pointer-events-none absolute -top-32 -right-24 w-[460px] h-[460px] rounded-full opacity-50 blur-3xl"
+          style={{ background: "radial-gradient(circle, rgba(230,70,150,0.18), transparent 70%)" }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-40 -left-24 w-[420px] h-[420px] rounded-full opacity-40 blur-3xl"
+          style={{ background: "radial-gradient(circle, rgba(169,139,82,0.16), transparent 70%)" }}
+        />
+
+        <div className="relative w-full max-w-[400px]">
+          {/* logo above the card on mobile (hero hidden there) */}
           <div className="flex justify-center lg:hidden mb-8">
             <img src="/event-besties-logo.png" alt="Event Besties" className="h-14 w-auto" />
           </div>
 
-          <div className="bg-white border border-card-border rounded-[18px] shadow-[0_20px_55px_rgba(20,25,40,0.14)] px-9 pt-10 pb-9">
-            {/* full-colour logo inside card (desktop) */}
+          <div className="bg-white border border-card-border rounded-[20px] shadow-[0_24px_60px_rgba(20,25,40,0.16)] px-9 pt-10 pb-9">
+            {/* full-colour logo inside the card on desktop */}
             <div className="hidden lg:flex justify-center mb-7">
-              <img src="/event-besties-logo.png" alt="Event Besties" className="h-12 w-auto" />
+              <img src="/event-besties-logo.png" alt="Event Besties" className="h-11 w-auto" />
             </div>
 
             <div className="text-center">
-              <div className="font-serif-display text-[24px] text-ink leading-none">
+              <div className="font-serif-display text-[25px] text-ink leading-none">
                 Welcome back
               </div>
-              <div className="mt-2 text-[10px] tracking-[0.2em] uppercase text-text-muted">
+              {/* brand-pink accent underline */}
+              <div
+                className="mx-auto mt-3 h-[3px] w-10 rounded-full"
+                style={{ background: "linear-gradient(90deg,#e6469b,#a98b52)" }}
+              />
+              <div className="mt-3 text-[10px] tracking-[0.2em] uppercase text-text-muted">
                 Admin Dashboard
               </div>
             </div>
@@ -86,7 +95,7 @@ export default async function LoginPage({
               <input type="hidden" name="callbackUrl" value={callbackUrl} />
               <button
                 type="submit"
-                className="group w-full inline-flex items-center justify-center gap-3 h-12 rounded-xl border border-card-border bg-white hover:bg-form-surface hover:border-[#d4d4da] transition-colors text-[14px] font-medium text-ink shadow-sm"
+                className="w-full inline-flex items-center justify-center gap-3 h-12 rounded-xl border border-card-border bg-white hover:bg-form-surface hover:border-[#d4d4da] transition-colors text-[14px] font-medium text-ink shadow-sm"
               >
                 <GoogleIcon size={18} />
                 Sign in with Google
