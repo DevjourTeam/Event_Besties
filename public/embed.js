@@ -104,17 +104,22 @@
 
       var overlay = document.createElement("div");
       overlay.setAttribute("data-eb-overlay", "1");
+      // The editor iframe is transparent, so this backdrop is what shows around
+      // the stage. Dim + blur it so the storefront reads as context behind the
+      // editor rather than competing with it.
       overlay.style.cssText =
-        "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);" +
+        "position:fixed;inset:0;z-index:99999;background:rgba(12,10,16,0.78);" +
+        "-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);" +
         "display:flex;align-items:center;justify-content:center;";
 
       var iframe = document.createElement("iframe");
       iframe.src = editorUrl;
-      // Transparent frame: the editor draws its own stage, and the space around
-      // it lets the storefront show through the modal backdrop.
+      // Transparent frame sized to the editor stage (1200x834 + padding), so the
+      // dim backdrop surrounds it and clicks outside the editor close the modal.
       iframe.setAttribute("allowtransparency", "true");
       iframe.style.cssText =
-        "width:95vw;height:90vh;border:none;background:transparent;";
+        "width:min(1240px,96vw);height:min(870px,94vh);" +
+        "border:none;background:transparent;";
       iframe.allow = "clipboard-write";
 
       var closeBtn = document.createElement("button");
