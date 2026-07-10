@@ -116,10 +116,12 @@ function Badge({
   label: string;
 }) {
   const tones: Record<string, string> = {
-    amber: "bg-[#fdf3e1] text-[#a06b1c] border-[#f1ddb3]",
-    blue: "bg-[#e8f1fb] text-[#2a5b94] border-[#cbdcef]",
+    // Type badges use the brand pair (gold = template, navy = canvas).
+    amber: "bg-[#f3eddf] text-[#8a6f3f] border-[#e5d7ba]",
+    blue: "bg-[#eceef3] text-[#3a4252] border-[#d7dae2]",
+    // Status badges stay semantic.
     green: "bg-[#e8f4ea] text-[#2a7a3c] border-[#c9e2cf]",
-    gray: "bg-[#eeece6] text-[#6b7385] border-[#dcd6c8]",
+    gray: "bg-[#f0f0f3] text-[#6b7385] border-[#dfe0e5]",
   };
   return (
     <span

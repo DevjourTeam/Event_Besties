@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { GridIcon, PenIcon, SignOutIcon } from "./Icons";
+import logoImg from "@/public/event-besties-logo.webp";
 
 type SidebarProps = {
   email: string;
@@ -18,15 +20,19 @@ export function Sidebar({ email, storeDomain, signOutAction }: SidebarProps) {
 
   return (
     <aside className="w-[60px] lg:w-[252px] shrink-0 bg-sidebar text-[#eef0f3] flex flex-col h-screen sticky top-0">
-      {/* Brand: full text on lg+, mark only below */}
+      {/* Brand: real logo on lg+, mark only below */}
       <div className="px-3 lg:px-6 pt-5 lg:pt-7 pb-4 lg:pb-5 flex items-center justify-center lg:justify-start">
         <div className="hidden lg:block">
-          <div
-            className="text-[22px] italic font-serif-display leading-none"
-            style={{ color: "#eef0f3" }}
-          >
-            Event Besties
-          </div>
+          {/* black logo inverted to white so it reads on the navy panel */}
+          <Image
+            src={logoImg}
+            alt="Event Besties"
+            width={150}
+            height={40}
+            unoptimized
+            priority
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
           <div
             className="mt-2 text-[10px] tracking-[0.18em]"
             style={{ color: "#6b7385" }}
