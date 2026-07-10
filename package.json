@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-web": "^0.77.1",
     "@sparticuz/chromium": "^147.0.0",
     "cloudinary": "^2.5.1",
     "fabric": "^7.2.0",
