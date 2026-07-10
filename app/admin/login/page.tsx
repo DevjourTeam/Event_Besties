@@ -25,16 +25,27 @@ export default async function LoginPage({
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#14060f]">
-      {/* Hero photo: served as AVIF/WebP at the right size by Next's optimizer,
-          preloaded (priority) with a blur placeholder so it never flashes blank. */}
+      {/* React hoists this into <head> so the hero starts downloading with the
+          document, not after the component tree is parsed. */}
+      <link
+        rel="preload"
+        as="image"
+        href={heroImg.src}
+        type="image/webp"
+        fetchPriority="high"
+      />
+      {/* Hero photo. `unoptimized` on purpose: the file is already a hand-tuned
+          97KB WebP, so we skip Next's on-demand optimizer (which re-encodes on
+          every cold hit) and serve it straight from the hashed /_next/static/media
+          path — Cache-Control: max-age=31536000, immutable. `priority` emits a
+          <link rel="preload">, and the blur placeholder covers the first paint. */}
       <Image
         src={heroImg}
         alt=""
         fill
         priority
+        unoptimized
         placeholder="blur"
-        sizes="100vw"
-        quality={80}
         className="object-cover object-center z-0"
       />
 
@@ -61,11 +72,11 @@ export default async function LoginPage({
       </div>
 
       {/* sign-in card, floated to the right */}
-      <div className="relative z-20 min-h-screen flex items-center justify-center lg:justify-end px-6 lg:pr-24 py-14">
+      <div className="relative z-20 min-h-screen flex items-center justify-center lg:justify-end px-6 lg:pr-56 py-14">
         <div className="w-full max-w-[400px]">
           <div className="bg-white/95 backdrop-blur-sm border border-white/60 rounded-[20px] shadow-[0_28px_70px_rgba(0,0,0,0.45)] px-9 pt-10 pb-9">
             <div className="flex justify-center mb-7">
-              <Image src={logoImg} alt="Event Besties" width={164} height={44} priority />
+              <Image src={logoImg} alt="Event Besties" width={164} height={44} priority unoptimized />
             </div>
 
             <div className="text-center">
