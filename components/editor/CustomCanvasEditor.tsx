@@ -12,7 +12,7 @@ const CanvasEditorRoot = dynamic(() => import("./canvas/CanvasEditorRoot"), {
   ssr: false,
   loading: () => (
     <div className="min-h-screen w-full flex items-center justify-center">
-      <EditorLoader label="Loading designer…" />
+      <EditorLoader label="Preparing your designer…" />
     </div>
   ),
 });

@@ -5,21 +5,24 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Lottie loading animation for the customer editors (dotLottie-web).
  *
- * The animation file is swappable without touching code:
- *   - drop a file at public/loader.lottie (or .json), or
- *   - set NEXT_PUBLIC_LOADER_LOTTIE_SRC to a lottie.host URL.
+ * The animation is self-hosted at public/loader.lottie rather than pulled from
+ * lottie.host, so there is no third-party runtime dependency inside the Shopify
+ * iframe. Swap it by replacing that file, or point
+ * NEXT_PUBLIC_LOADER_LOTTIE_SRC at any .lottie/.json URL.
  *
  * If the animation fails to load for any reason, we fall back to a plain CSS
  * spinner — a loading screen must never end up blank.
  */
-const SRC = process.env.NEXT_PUBLIC_LOADER_LOTTIE_SRC || "/loader.json";
+const SRC = process.env.NEXT_PUBLIC_LOADER_LOTTIE_SRC || "/loader.lottie";
 
 export function EditorLoader({
   label = "Loading…",
-  size = 150,
+  width = 260,
+  height = 146, // 16:9 — matches the 1920x1080 loader animation
 }: {
   label?: string;
-  size?: number;
+  width?: number;
+  height?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
@@ -45,6 +48,8 @@ export function EditorLoader({
           loop: true,
           canvas: canvasRef.current,
           src: SRC,
+          // Centre and scale to fit whatever aspect the animation has.
+          layout: { fit: "contain", align: [0.5, 0.5] },
         });
         if (process.env.NEXT_PUBLIC_LOADER_DEBUG === "1") {
           (["load", "loadError", "ready", "render"] as const).forEach((ev) =>
@@ -79,17 +84,17 @@ export function EditorLoader({
       <div className="flex flex-col items-center gap-3 rounded-2xl bg-white/95 px-9 py-8 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
         <div
           className="relative grid place-items-center"
-          style={{ width: size, height: size }}
+          style={{ width, height }}
         >
           {/* Kept mounted (the player needs the ref) but hidden until it paints. */}
           {!failed && (
             <canvas
               ref={canvasRef}
-              width={size * 2}
-              height={size * 2}
+              width={width * 2}
+              height={height * 2}
               style={{
-                width: size,
-                height: size,
+                width,
+                height,
                 display: "block",
                 opacity: playing ? 1 : 0,
                 transition: "opacity 0.25s ease",

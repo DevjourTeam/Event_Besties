@@ -288,7 +288,7 @@ export function TemplateEditor({ config }: { config: TemplateConfig }) {
           {/* the SVG is fetched + injected after mount — cover it until then */}
           {!loaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-cream/70 rounded-card">
-              <EditorLoader label="Loading template…" />
+              <EditorLoader label="Preparing your template…" />
             </div>
           )}
         </div>
