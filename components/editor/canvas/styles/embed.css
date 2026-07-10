@@ -16,7 +16,18 @@
   justify-content: safe center;
   padding: 28px;
   overflow: auto;
-  background: #eef0f3;
+  /* Transparent: the editor is shown inside an iframe over the storefront, so
+     everything around the stage must let the shop page (and the modal's dim
+     backdrop) show through. */
+  background: transparent;
+}
+
+/* Short viewports (the embed iframe is ~90vh): trim padding so the fixed-height
+   stage fits without forcing a scrollbar. */
+@media (max-height: 900px) {
+  .ps-embed-page {
+    padding: 10px;
+  }
 }
 
 @media (max-width: 760px) {

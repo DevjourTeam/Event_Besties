@@ -1,0 +1,7 @@
+/* The customer editor is rendered inside an iframe that floats over the Shopify
+   storefront. Keep the document itself transparent so the shop page (and the
+   modal's dim backdrop) shows through around the editor stage.
+   `html body` (specificity 0,0,2) beats the `body` rule in globals.css. */
+html body {
+  background: transparent;
+}

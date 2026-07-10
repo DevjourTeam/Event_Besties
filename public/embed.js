@@ -110,8 +110,11 @@
 
       var iframe = document.createElement("iframe");
       iframe.src = editorUrl;
+      // Transparent frame: the editor draws its own stage, and the space around
+      // it lets the storefront show through the modal backdrop.
+      iframe.setAttribute("allowtransparency", "true");
       iframe.style.cssText =
-        "width:95vw;height:90vh;border:none;border-radius:12px;background:#fff;";
+        "width:95vw;height:90vh;border:none;background:transparent;";
       iframe.allow = "clipboard-write";
 
       var closeBtn = document.createElement("button");
