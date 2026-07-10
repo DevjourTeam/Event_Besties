@@ -1,5 +1,8 @@
+import Image from "next/image";
 import { signIn } from "@/lib/auth";
 import { GoogleIcon } from "@/components/admin/Icons";
+import heroImg from "@/public/login-hero.webp";
+import logoImg from "@/public/event-besties-logo.webp";
 
 async function googleSignInAction(formData: FormData) {
   "use server";
@@ -21,18 +24,23 @@ export default async function LoginPage({
   const error = params.error;
 
   return (
-    <div
-      className="relative min-h-screen w-full overflow-hidden"
-      style={{
-        backgroundColor: "#14060f",
-        backgroundImage: "url('/login-hero.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#14060f]">
+      {/* Hero photo: served as AVIF/WebP at the right size by Next's optimizer,
+          preloaded (priority) with a blur placeholder so it never flashes blank. */}
+      <Image
+        src={heroImg}
+        alt=""
+        fill
+        priority
+        placeholder="blur"
+        sizes="100vw"
+        quality={80}
+        className="object-cover object-center z-0"
+      />
+
       {/* soft scrim: keeps the left logo clear, gently darkens the card side */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 z-10 pointer-events-none"
         style={{
           background:
             "linear-gradient(90deg, rgba(8,4,8,0.30) 0%, rgba(8,4,8,0.04) 38%, rgba(8,4,8,0.18) 68%, rgba(8,4,8,0.55) 100%)",
@@ -40,12 +48,12 @@ export default async function LoginPage({
       />
       {/* grain texture */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.05] mix-blend-soft-light"
+        className="absolute inset-0 z-10 pointer-events-none opacity-[0.05] mix-blend-soft-light"
         style={{ backgroundImage: GRAIN }}
       />
 
       {/* tagline, bottom-left */}
-      <div className="absolute left-10 bottom-10 right-10 hidden lg:block pointer-events-none">
+      <div className="absolute left-10 bottom-10 right-10 z-20 hidden lg:block pointer-events-none">
         <p className="text-[15px] text-white/75 max-w-md leading-relaxed">
           Custom signs, boards &amp; cutouts for every celebration — designed and
           published from your studio.
@@ -53,11 +61,11 @@ export default async function LoginPage({
       </div>
 
       {/* sign-in card, floated to the right */}
-      <div className="relative min-h-screen flex items-center justify-center lg:justify-end px-6 lg:pr-24 py-14">
+      <div className="relative z-20 min-h-screen flex items-center justify-center lg:justify-end px-6 lg:pr-24 py-14">
         <div className="w-full max-w-[400px]">
           <div className="bg-white/95 backdrop-blur-sm border border-white/60 rounded-[20px] shadow-[0_28px_70px_rgba(0,0,0,0.45)] px-9 pt-10 pb-9">
             <div className="flex justify-center mb-7">
-              <img src="/event-besties-logo.png" alt="Event Besties" className="h-11 w-auto" />
+              <Image src={logoImg} alt="Event Besties" width={164} height={44} priority />
             </div>
 
             <div className="text-center">
