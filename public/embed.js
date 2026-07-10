@@ -96,6 +96,11 @@
       var idEl = document.querySelector('[name="id"]');
       if (idEl && idEl.value) variantId = idEl.value;
 
+      // Set by the editor via postMessage: true while the canvas has objects
+      // that would be lost on close/reload.
+      var isDirty = false;
+      var dialogEl = null;
+
       var editorUrl =
         BASE_URL +
         "/editor/" +
@@ -130,14 +135,94 @@
         "position:fixed;top:14px;right:18px;width:36px;height:36px;" +
         "border-radius:50%;border:none;background:#1a1a1a;color:#fff;" +
         "font-size:22px;cursor:pointer;z-index:100000;line-height:1;";
-      closeBtn.addEventListener("click", cleanup);
+      closeBtn.addEventListener("click", requestClose);
 
       overlay.addEventListener("click", function (e) {
-        if (e.target === overlay) cleanup();
+        if (e.target === overlay) requestClose();
       });
 
+      // ---- unsaved-work guard ------------------------------------------
+      // Reload / tab close: the browser's native "Leave site?" dialog.
+      function onBeforeUnload(e) {
+        if (!isDirty) return;
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+
+      function removeDialog() {
+        if (dialogEl && dialogEl.parentNode) dialogEl.parentNode.removeChild(dialogEl);
+        dialogEl = null;
+      }
+
+      // Closing the modal (X or backdrop): our own two-button confirm.
+      function requestClose() {
+        if (!isDirty) return cleanup();
+        if (dialogEl) return;
+        dialogEl = buildConfirm();
+        document.body.appendChild(dialogEl);
+      }
+
+      function buildConfirm() {
+        var wrap = document.createElement("div");
+        wrap.style.cssText =
+          "position:fixed;inset:0;z-index:100001;background:rgba(12,10,16,0.6);" +
+          "display:flex;align-items:center;justify-content:center;";
+        var card = document.createElement("div");
+        card.style.cssText =
+          "background:#fff;border-radius:14px;padding:26px;max-width:380px;" +
+          "width:calc(100% - 40px);box-shadow:0 24px 60px rgba(0,0,0,0.35);" +
+          "font-family:system-ui,-apple-system,'Segoe UI',sans-serif;text-align:center;";
+        var h = document.createElement("div");
+        h.textContent = "Discard your design?";
+        h.style.cssText =
+          "font-size:17px;font-weight:700;color:#1b2333;margin-bottom:8px;";
+        var p = document.createElement("p");
+        p.textContent =
+          "You have unsaved changes on the canvas. If you close now, your design will be lost.";
+        p.style.cssText =
+          "margin:0 0 20px;font-size:13px;line-height:1.6;color:#5a6172;";
+        var row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:10px;";
+        var keep = document.createElement("button");
+        keep.type = "button";
+        keep.textContent = "Keep editing";
+        keep.style.cssText =
+          "flex:1;height:42px;border-radius:9px;border:1px solid #d4d4da;" +
+          "background:#fff;color:#1b2333;font-size:14px;font-weight:600;cursor:pointer;";
+        var discard = document.createElement("button");
+        discard.type = "button";
+        discard.textContent = "Discard design";
+        discard.style.cssText =
+          "flex:1;height:42px;border-radius:9px;border:none;background:#e0563b;" +
+          "color:#fff;font-size:14px;font-weight:600;cursor:pointer;";
+        keep.addEventListener("click", removeDialog);
+        discard.addEventListener("click", function () {
+          isDirty = false;
+          cleanup();
+        });
+        wrap.addEventListener("click", function (e) {
+          if (e.target === wrap) removeDialog();
+        });
+        row.appendChild(keep);
+        row.appendChild(discard);
+        card.appendChild(h);
+        card.appendChild(p);
+        card.appendChild(row);
+        wrap.appendChild(card);
+        return wrap;
+      }
+
       function onMessage(e) {
-        if (!e.data || e.data.type !== "DESIGN_READY" || !e.data.payload) return;
+        if (!e.data) return;
+        // Editor reports whether there is in-progress work worth warning about.
+        if (e.data.type === "EB_DIRTY") {
+          isDirty = !!e.data.dirty;
+          return;
+        }
+        if (e.data.type !== "DESIGN_READY" || !e.data.payload) return;
+        // The design is committed — never prompt on the redirect to /cart.
+        isDirty = false;
         var p = e.data.payload;
         // Property keys starting with "_" are hidden from the customer in
         // the cart and order confirmation, but are visible to admins on the
@@ -182,11 +267,14 @@
 
       function cleanup() {
         window.removeEventListener("message", onMessage);
+        window.removeEventListener("beforeunload", onBeforeUnload);
+        removeDialog();
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         if (closeBtn.parentNode) closeBtn.parentNode.removeChild(closeBtn);
       }
 
       window.addEventListener("message", onMessage);
+      window.addEventListener("beforeunload", onBeforeUnload);
       overlay.appendChild(iframe);
       document.body.appendChild(overlay);
       document.body.appendChild(closeBtn);

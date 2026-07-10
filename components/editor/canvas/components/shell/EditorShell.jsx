@@ -41,10 +41,6 @@ export default function EditorShell({
             <span className="ps-topbar__info" title="About this product">
               <i className="nxi nxi-info" aria-hidden="true" />
             </span>
-            <button type="button" className="ps-btn ps-btn--outline">
-              Change product
-            </button>
-            <span className="ps-topbar__tab">Printing</span>
             <div className="ps-topbar__spacer" />
             <button type="button" className="ps-btn ps-btn--save" onClick={onSave}>
               <i className="nxi nxi-save" aria-hidden="true" />

@@ -346,6 +346,8 @@
   background: var(--ps-surface);
   border: 1px solid var(--ps-border-2);
   color: var(--ps-ink);
+  /* the base .ps-btn sets no padding — without this the label hugs the border */
+  padding: 7px 14px;
 }
 .ps-btn--save:hover { box-shadow: var(--ps-shadow-sm); }
 .ps-btn--save .nxi { font-size: 16px; }
@@ -977,7 +979,7 @@
   align-items: center;
   gap: var(--ps-sp-4);
   height: var(--ps-topbar-h);
-  padding: 0 var(--ps-sp-1) var(--ps-sp-3);
+  padding: 0 var(--ps-sp-2) var(--ps-sp-3);
 }
 .ps-topbar__title {
   font-weight: 700;

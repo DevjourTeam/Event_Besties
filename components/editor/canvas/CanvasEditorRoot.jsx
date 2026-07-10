@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { EditorProvider } from './editor/EditorProvider'
 import EditorShell from './components/shell/EditorShell'
+import UnsavedGuard from './UnsavedGuard'
 import { preloadAllFonts } from './utils/fontLoader'
 import { handoffDesign } from '@/lib/cart-client'
 import './styles/tokens.css'
@@ -26,6 +27,8 @@ export default function CanvasEditorRoot({ doc, productTitle, price, templateId,
 
   // { kind: 'processing' | 'success' | 'error', msg }
   const [status, setStatus] = useState(null)
+  // once the design is on its way to the cart, stop warning about unsaved work
+  const [handedOff, setHandedOff] = useState(false)
 
   const finalize = useCallback(
     async (pngBase64, { addToCart }) => {
@@ -51,6 +54,9 @@ export default function CanvasEditorRoot({ doc, productTitle, price, templateId,
           })
           return
         }
+        // The design is committed — drop the unsaved-work guard so the redirect
+        // to /cart isn't interrupted by a "leave site?" prompt.
+        setHandedOff(true)
         // In a Shopify iframe this posts to the parent; standalone it hits the
         // Storefront cart API and navigates to /cart.
         await handoffDesign({
@@ -71,6 +77,7 @@ export default function CanvasEditorRoot({ doc, productTitle, price, templateId,
   return (
     <div className="ps-embed-page">
       <EditorProvider initialDoc={doc}>
+        <UnsavedGuard disabled={handedOff} />
         <EditorShell
           productTitle={productTitle || 'Create Your Design'}
           price={price}
