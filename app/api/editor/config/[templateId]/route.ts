@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProductMetafield } from "@/lib/shopify-admin";
+import { getProductMetafield, getProductImage } from "@/lib/shopify-admin";
 import type { AnyConfig } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -27,15 +27,17 @@ export async function GET(
   }
 
   try {
-    const [tmpl, cnv] = await Promise.all([
+    const [tmpl, cnv, productImage] = await Promise.all([
       getProductMetafield<AnyConfig>(templateId, "custom", "template_config"),
       getProductMetafield<AnyConfig>(templateId, "custom", "canvas_config"),
+      getProductImage(templateId),
     ]);
     const config = tmpl ?? cnv;
     if (!config) {
       return NextResponse.json({ error: "Not configured" }, { status: 404 });
     }
-    return NextResponse.json(config, {
+    // The editor shows this as the product thumbnail in its bottom bar.
+    return NextResponse.json({ ...config, productImage }, {
       headers: {
         // Loose CORS so embed.js on a Shopify domain can call us.
         "Access-Control-Allow-Origin": "*",

@@ -87,6 +87,27 @@ export async function getProductMetafield<T = unknown>(
   }
 }
 
+/**
+ * The product's featured image — shown as the product thumbnail in the editor's
+ * bottom bar. Returns null when the product has no image.
+ */
+export async function getProductImage(productId: string): Promise<string | null> {
+  try {
+    const data = await adminFetch<{
+      product: { featuredImage: { url: string } | null } | null;
+    }>(
+      `query GetProductImage($id: ID!) {
+         product(id: $id) { featuredImage { url } }
+       }`,
+      { id: toGid("Product", productId) }
+    );
+    return data.product?.featuredImage?.url ?? null;
+  } catch {
+    // Never let a missing image break the editor config.
+    return null;
+  }
+}
+
 export async function setProductMetafield(
   productId: string,
   namespace: string,

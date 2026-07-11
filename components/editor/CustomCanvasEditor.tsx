@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import type { CanvasConfig } from "@/lib/types";
+import type { CanvasConfig, WithProductImage } from "@/lib/types";
 
 // The custom editor is client-only (Fabric.js needs the DOM). Load it with
 // ssr:false — allowed here because this file is a Client Component. This is the
@@ -24,7 +24,11 @@ const CanvasEditorRoot = dynamic(() => import("./canvas/CanvasEditorRoot"), {
  * doc.shape.svgPath once the CanvasConfig grows a shape-path field; today it is
  * a full rectangle, matching the current builder output.
  */
-export function CustomCanvasEditor({ config }: { config: CanvasConfig }) {
+export function CustomCanvasEditor({
+  config,
+}: {
+  config: WithProductImage<CanvasConfig>;
+}) {
   // variantId arrives on the URL when opened from a Shopify product page; it is
   // what the cart hand-off attaches the finished design to.
   const variantId = useSearchParams().get("variantId") ?? "";
@@ -44,6 +48,8 @@ export function CustomCanvasEditor({ config }: { config: CanvasConfig }) {
     dpi: 150,
     background: { type: "none", value: null },
     mockup: null,
+    // Shopify's featured image for this product — the bottom-bar thumbnail.
+    productImage: config.productImage ?? null,
   };
 
   return (

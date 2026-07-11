@@ -24,6 +24,8 @@ const DEFAULT_DOC = {
   // optional product mockup photo shown behind the shape as context (never printed).
   // null = bare shape. Set per-product when the data provides one ("whatever product comes").
   mockup: null,
+  // Shopify's featured image for the product — shown as the bottom-bar thumbnail.
+  productImage: null,
 }
 
 const initialState = {

@@ -62,6 +62,12 @@ export type CanvasConfig = {
   createdAt: string;
 };
 
+/**
+ * Fields the config API adds on top of the stored metafield (not persisted).
+ * `productImage` is the product's featured image, used as the editor thumbnail.
+ */
+export type WithProductImage<T> = T & { productImage?: string | null };
+
 export type AnyConfig = TemplateConfig | CanvasConfig;
 
 export type DashboardItem = {
