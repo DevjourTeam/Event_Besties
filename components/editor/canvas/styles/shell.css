@@ -1230,20 +1230,26 @@
 .ps-preview__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 20px;
+  padding: 24px;
   display: grid;
   place-items: center;
-  background: var(--ps-stage);
+  /* darker than the white print surface, so a shaped export (arch / circle /
+     cutout) reads as its true silhouette rather than a white square */
+  background: #d9dbe1;
   overflow: auto;
 }
+/* The export is a SHAPED png (product surface inside the cut line, transparent
+   outside). So: no background fill, no border and no box-shadow — those are all
+   rectangular and would square off an arch/circle/cutout. The drop-shadow
+   filter follows the alpha channel, so the silhouette reads correctly against
+   the grey backdrop. */
 .ps-preview__body img {
   max-width: 100%;
   max-height: 60vh;
   object-fit: contain;
-  background: #fff;
-  border: 1px solid var(--ps-border);
-  border-radius: var(--ps-r-sm);
-  box-shadow: var(--ps-shadow-sm);
+  background: transparent;
+  border: none;
+  filter: drop-shadow(0 8px 20px rgba(20, 25, 40, 0.22));
 }
 .ps-preview__foot {
   display: flex;
