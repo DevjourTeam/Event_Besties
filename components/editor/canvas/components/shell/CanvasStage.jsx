@@ -40,6 +40,7 @@ export default function CanvasStage() {
   const undoStack = useRef([])
   const redoStack = useRef([])
   const restoringRef = useRef(false)
+  const thumbTimer = useRef(null)
 
   // ---- fit the canvas into the container, preserving doc aspect ----
   const computeFit = useCallback(() => {
@@ -175,12 +176,31 @@ export default function CanvasStage() {
       api.setHistory(undoStack.current.length > 1, false)
     }
 
+    // Live design preview for the bottom bar. Debounced + tiny (long edge
+    // ~160px) so re-rendering it on every edit stays cheap.
+    const syncThumb = () => {
+      clearTimeout(thumbTimer.current)
+      thumbTimer.current = setTimeout(() => {
+        try {
+          const hasArt = fc.getObjects().some((o) => !o.__chrome)
+          if (!hasArt) return api.setThumb(null)
+          const longest = Math.max(fc.getWidth() || 1, fc.getHeight() || 1)
+          api.setThumb(
+            fc.toDataURL({ format: 'png', multiplier: Math.min(1, 160 / longest) })
+          )
+        } catch {
+          /* tainted canvas etc. — just leave the previous thumb */
+        }
+      }, 250)
+    }
+
     fc.on('selection:created', syncSelection)
     fc.on('selection:updated', syncSelection)
     fc.on('selection:cleared', syncSelection)
-    fc.on('object:added', () => { syncLayers(); pushHistory() })
-    fc.on('object:removed', () => { syncLayers(); pushHistory(); updateDimLabel() })
-    fc.on('object:modified', (e) => { constrainObject(e.target); pushHistory(); syncSelection() })
+    fc.on('object:added', () => { syncLayers(); pushHistory(); syncThumb() })
+    fc.on('object:removed', () => { syncLayers(); pushHistory(); updateDimLabel(); syncThumb() })
+    fc.on('object:modified', (e) => { constrainObject(e.target); pushHistory(); syncSelection(); syncThumb() })
+    fc.on('text:changed', syncThumb)
     // live dimension label + boundary constraint while moving / scaling / rotating
     fc.on('object:moving', (e) => { constrainObject(e.target); updateDimLabel() })
     fc.on('object:scaling', (e) => { constrainObject(e.target); updateDimLabel() })
@@ -562,6 +582,7 @@ export default function CanvasStage() {
 
     return () => {
       window.removeEventListener('keydown', onKey)
+      clearTimeout(thumbTimer.current)
       fc.dispose()
       fabricRef.current = null
     }

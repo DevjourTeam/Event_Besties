@@ -36,6 +36,7 @@ const initialState = {
   canRedo: false,
   ready: false,
   recentUploads: [], // { id, name, dataURL } — persists while the app is open
+  thumb: null, // live PNG data URL of the design, shown in the bottom bar
 }
 
 function reducer(state, action) {
@@ -48,6 +49,8 @@ function reducer(state, action) {
       return { ...state, selection: action.selection }
     case 'SET_LAYERS':
       return { ...state, layers: action.layers }
+    case 'SET_THUMB':
+      return { ...state, thumb: action.thumb }
     case 'SET_HISTORY':
       return { ...state, canUndo: action.canUndo, canRedo: action.canRedo }
     case 'PATCH_DOC':
@@ -96,6 +99,7 @@ export function EditorProvider({ initialDoc, children }) {
       setTool: (tool) => dispatch({ type: 'SET_TOOL', tool }),
       setSelection: (selection) => dispatch({ type: 'SET_SELECTION', selection }),
       setLayers: (layers) => dispatch({ type: 'SET_LAYERS', layers }),
+      setThumb: (thumb) => dispatch({ type: 'SET_THUMB', thumb }),
       setHistory: (canUndo, canRedo) => dispatch({ type: 'SET_HISTORY', canUndo, canRedo }),
       addUpload: (item) => dispatch({ type: 'ADD_UPLOAD', item }),
       // canvas imperative handle (registered by CanvasStage)

@@ -1116,6 +1116,13 @@
   display: grid; place-items: center;
   overflow: hidden;
 }
+/* live preview of the customer's design */
+.ps-thumb__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
 .ps-thumb__dot {
   position: absolute;
   top: -3px; right: -3px;

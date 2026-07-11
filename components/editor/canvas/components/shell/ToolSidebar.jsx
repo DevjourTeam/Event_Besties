@@ -26,7 +26,6 @@ const TOOLS = [
   },
   { id: 'upload', title: 'Upload design', sub: 'Browse or import', icon: 'upload' },
   { id: 'text', title: 'Add Text', sub: 'Add your text here', icon: 'text' },
-  { id: 'ideas', title: 'Design Ideas', sub: 'Ready to use templates', icon: 'template' },
 ]
 
 export default function ToolSidebar() {

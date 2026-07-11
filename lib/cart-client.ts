@@ -58,10 +58,16 @@ export async function handoffDesign(payload: DesignReadyPayload): Promise<void> 
       cartId: localStorage.getItem(CART_ID_KEY),
       quantity: 1,
       attributes: [
+        // Keys prefixed with "_" are hidden from the customer but visible to
+        // admins on the order — these are the fulfilment/internal fields.
         { key: "_Print file", value: payload.printUrl },
         { key: "_Preview", value: payload.previewUrl },
         { key: "_template_id", value: payload.templateId },
         { key: "_design_type", value: payload.designType },
+        // No underscore = shown to the customer. Shopify auto-links URLs, so
+        // this becomes a clickable "preview your design" link in the cart,
+        // checkout and order-confirmation email.
+        { key: "Design preview", value: payload.previewUrl },
         ...(payload.customizationSummary
           ? [{ key: "Customization", value: payload.customizationSummary }]
           : []),

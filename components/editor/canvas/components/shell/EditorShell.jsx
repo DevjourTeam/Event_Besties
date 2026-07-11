@@ -13,7 +13,7 @@ export default function EditorShell({
   onProcess: onProcessProp,
   onSave: onSaveProp,
 }) {
-  const { doc } = useEditorState()
+  const { doc, thumb } = useEditorState()
   const api = useEditorApi()
 
   const onProcess = async () => {
@@ -54,8 +54,12 @@ export default function EditorShell({
           {/* bottom bar */}
           <footer className="ps-bottombar">
             <div>
-              <div className="ps-thumb">
-                <span className="ps-thumb__dot" />
+              <div className="ps-thumb" title="Your design">
+                {thumb ? (
+                  <img className="ps-thumb__img" src={thumb} alt="Design preview" />
+                ) : (
+                  <span className="ps-thumb__dot" />
+                )}
               </div>
               <div className="ps-thumb__label">{doc.name}</div>
             </div>
