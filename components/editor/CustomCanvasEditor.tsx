@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { EditorLoader } from "./EditorLoader";
 import type { CanvasConfig } from "@/lib/types";
 
 // The custom editor is client-only (Fabric.js needs the DOM). Load it with
@@ -11,8 +10,8 @@ import type { CanvasConfig } from "@/lib/types";
 const CanvasEditorRoot = dynamic(() => import("./canvas/CanvasEditorRoot"), {
   ssr: false,
   loading: () => (
-    <div className="min-h-screen w-full flex items-center justify-center">
-      <EditorLoader label="Preparing your designer…" />
+    <div className="w-full h-full flex items-center justify-center text-[13px] text-text-muted">
+      Loading designer…
     </div>
   ),
 });

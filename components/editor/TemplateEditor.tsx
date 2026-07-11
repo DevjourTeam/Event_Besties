@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { EditorShell } from "./EditorShell";
-import { EditorLoader } from "./EditorLoader";
 import { useToast } from "@/components/Toast";
 import type { TemplateConfig } from "@/lib/types";
 import { handoffDesign } from "@/lib/cart-client";
@@ -278,19 +277,13 @@ export function TemplateEditor({ config }: { config: TemplateConfig }) {
           Cannot render preview without a valid SVG URL.
         </div>
       ) : (
-        <div ref={zoomOuterRef} className="shrink-0 relative">
+        <div ref={zoomOuterRef} className="shrink-0">
           <div
             ref={zoomInnerRef}
             className="bg-white border border-card-border rounded-card shadow-md"
           >
             <div ref={containerRef} className="w-full h-full" />
           </div>
-          {/* the SVG is fetched + injected after mount — cover it until then */}
-          {!loaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-cream/70 rounded-card">
-              <EditorLoader label="Preparing your template…" />
-            </div>
-          )}
         </div>
       )}
     </div>
