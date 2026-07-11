@@ -7,7 +7,8 @@ import { useEditorApi } from '../../../editor/EditorProvider'
  * Only shapes that text-on-path can render faithfully are offered, and each one
  * is visually distinct. (The old list had three duplicate pairs: arch/bridge
  * and archDown/valley were the same curve at different offsets, and wave/waveAlt
- * were mirror images of each other.)
+ * were mirror images. The waves were dropped entirely — they never read as
+ * professional signage.)
  *
  * `size` scales the depth of the curve. W is the text's NATURAL width, measured
  * with any existing path detached — otherwise each change compounds on the last.
@@ -16,12 +17,6 @@ const EFFECTS = [
   { id: 'plain', label: 'None', build: () => null },
   { id: 'archUp', label: 'Arch', build: (W, s) => `M 0 ${s} Q ${W / 2} ${-s} ${W} ${s}` },
   { id: 'archDown', label: 'Arch down', build: (W, s) => `M 0 ${-s} Q ${W / 2} ${s} ${W} ${-s}` },
-  {
-    id: 'wave',
-    label: 'Wave',
-    build: (W, s) =>
-      `M 0 0 C ${W * 0.25} ${-s * 1.6} ${W * 0.25} ${s * 1.6} ${W * 0.5} 0 S ${W * 0.75} ${-s * 1.6} ${W} 0`,
-  },
   { id: 'slant', label: 'Slant', build: (W, s) => `M 0 ${s} L ${W} ${-s}` },
   {
     id: 'circle',
@@ -123,7 +118,6 @@ function EffectIcon({ id }) {
     plain: 'M6 16 H42',
     archUp: 'M6 22 Q24 6 42 22',
     archDown: 'M6 10 Q24 26 42 10',
-    wave: 'M6 16 C15 6 15 26 24 16 S33 6 42 16',
     slant: 'M6 22 L42 10',
     circle: 'M24 6 A10 10 0 1 1 23.9 6',
   }
