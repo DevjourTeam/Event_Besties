@@ -827,11 +827,21 @@
 }
 .ps-effectcell {
   aspect-ratio: 3 / 2; border: 1px solid var(--ps-border); border-radius: var(--ps-r-sm);
-  background: var(--ps-surface); cursor: pointer; padding: 10px; display: grid; place-items: center;
+  background: var(--ps-surface); cursor: pointer; padding: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   transition: border-color var(--ps-ease);
 }
 .ps-effectcell:hover { border-color: var(--ps-border-2); }
 .ps-effectcell.is-active { border-color: var(--ps-gold); }
+.ps-effectcell__label {
+  font-family: var(--ps-font-ui);
+  font-size: 11px;
+  color: var(--ps-muted);
+  line-height: 1;
+}
+.ps-effectcell.is-active .ps-effectcell__label { color: var(--ps-ink); font-weight: 600; }
+/* the size slider does nothing for None / Circle */
+.ps-tslider input[type='range']:disabled { opacity: 0.4; cursor: default; }
 
 /* ======================= colour panel ======================= */
 .ps-color-remove {

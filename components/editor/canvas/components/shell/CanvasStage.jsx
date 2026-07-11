@@ -583,16 +583,43 @@ export default function CanvasStage() {
           /* image failed to load — leave fill unchanged */
         }
       },
+      /**
+       * The text's natural (un-warped) size.
+       *
+       * Once a path is applied, Fabric rewrites the text's width/height to the
+       * path's bounding box. Building the next effect from that value made each
+       * change compound — the curve got progressively wilder. So measure with
+       * the path temporarily detached and restore it.
+       */
+      getTextBaseSize: () => {
+        const o = fc.getActiveObject()
+        if (!o || !/text/i.test(o.type || '')) return null
+        const path = o.path || null
+        if (path) {
+          o.set('path', null)
+          o.initDimensions?.()
+        }
+        const size = { width: o.width, height: o.height }
+        if (path) {
+          o.set('path', path)
+          o.initDimensions?.()
+        }
+        return size
+      },
+
       // text-on-path warp: pass an SVG path string, or null to reset to plain
       setTextPath: (pathStr) => {
         const o = fc.getActiveObject()
         if (!o) return
         if (!pathStr) {
-          o.set({ path: undefined })
+          // null (not undefined) actually clears it, and the dimensions have to
+          // be recomputed or the text keeps the old path's bounding box.
+          o.set('path', null)
         } else {
           const p = new Path(pathStr, { fill: '', stroke: '', visible: false })
-          o.set({ path: p, pathAlign: 'center', pathSide: 'left' })
+          o.set({ path: p, pathAlign: 'center', pathSide: 'left', pathStartOffset: 0 })
         }
+        o.initDimensions?.()
         o.setCoords(); fc.requestRenderAll(); pushHistory(); syncSelection()
       },
 
