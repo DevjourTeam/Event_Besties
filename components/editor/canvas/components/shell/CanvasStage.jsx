@@ -107,11 +107,17 @@ export default function CanvasStage() {
       }
     }
 
-    // a crisp preview of the image's CURRENT state (crop + filters baked in)
+    // A crisp preview of the image's CURRENT state (crop + filters baked in).
+    //
+    // toDataURL renders the object at its ON-CANVAS size (scale included), so
+    // the multiplier has to be derived from the scaled size — not the natural
+    // width. Deriving it from the natural width produced a ~95px thumbnail for
+    // an element sitting ~146px wide on the canvas, which the panel then had to
+    // upscale (blurry). Target ~600px on the long edge instead.
     const imgThumb = (o) => {
       try {
-        // cap the long edge ~520px so previews stay sharp without huge data URLs
-        const mult = Math.min(1, 520 / (o.width || 520))
+        const longest = Math.max(o.getScaledWidth() || 1, o.getScaledHeight() || 1)
+        const mult = Math.min(6, Math.max(1, 600 / longest))
         return o.toDataURL({ format: 'png', multiplier: mult, enableRetinaScaling: false })
       } catch {
         return o.getSrc?.() || o._element?.src || null
