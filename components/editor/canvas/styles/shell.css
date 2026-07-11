@@ -509,10 +509,18 @@
   font-size: var(--ps-fs-xs); font-weight: 600; color: var(--ps-ink-2);
 }
 .ps-colormode__thumb {
+  position: relative;
   width: 58px; height: 48px; border: 1px solid var(--ps-border);
-  border-radius: var(--ps-r-sm); overflow: hidden; display: grid; place-items: center;
+  border-radius: var(--ps-r-sm); overflow: hidden;
 }
-.ps-colormode__thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ps-colormode__thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  padding: 3px;
+  object-fit: contain;
+  display: block;
+}
 .ps-colormode:hover .ps-colormode__thumb { border-color: var(--ps-gold); }
 
 .ps-select { position: relative; }
@@ -566,10 +574,22 @@
 
 /* ======================= adjust (Edit image) panel ======================= */
 .ps-adjust__preview {
-  height: 130px; border: 1px solid var(--ps-border); border-radius: var(--ps-r);
-  display: grid; place-items: center; padding: 8px;
+  position: relative;
+  height: 150px; border: 1px solid var(--ps-border); border-radius: var(--ps-r);
+  overflow: hidden; /* never let the preview bleed over the sliders below */
 }
-.ps-adjust__preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+/* Absolutely positioned so the box — not the image's intrinsic size — decides
+   the dimensions. A percentage height on a grid/flex item does not resolve
+   reliably here, which let the full-size thumbnail render at its natural
+   height and spill behind the sliders. object-fit honours the padding. */
+.ps-adjust__preview img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  padding: 8px;
+  object-fit: contain;
+  display: block;
+}
 .ps-adjust__crop {
   align-self: center; display: inline-flex; align-items: center; gap: 6px;
   background: transparent; border: none; cursor: pointer; margin-top: -4px;
@@ -598,6 +618,7 @@
   gap: 10px;
 }
 .ps-filtercell {
+  position: relative;
   aspect-ratio: 1 / 1;
   border: 2px solid var(--ps-border);
   border-radius: var(--ps-r-sm);
@@ -608,7 +629,14 @@
   padding: 4px;
   transition: border-color var(--ps-ease);
 }
-.ps-filtercell img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ps-filtercell img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  padding: 4px;
+  object-fit: contain;
+  display: block;
+}
 .ps-filtercell:hover { border-color: var(--ps-border-2); }
 .ps-filtercell.is-active { border-color: var(--ps-gold); }
 
