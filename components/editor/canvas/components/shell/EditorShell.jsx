@@ -77,13 +77,14 @@ export default function EditorShell({
 
           {/* bottom bar */}
           <footer className="ps-bottombar">
-            <div>
-              <button
-                type="button"
-                className="ps-thumb"
-                onClick={hasDesign ? openPreview : undefined}
-                title={hasDesign ? 'Preview your design' : doc.name}
-              >
+            <button
+              type="button"
+              className="ps-previewcta"
+              onClick={openPreview}
+              disabled={!hasDesign}
+              title={hasDesign ? 'Preview your design' : 'Add something to your design first'}
+            >
+              <span className="ps-thumb">
                 {thumbSrc ? (
                   // No crossOrigin: this is only displayed, never read back into
                   // a canvas, and the flag would break it if the CDN omits CORS.
@@ -91,9 +92,15 @@ export default function EditorShell({
                 ) : (
                   <span className="ps-thumb__dot" />
                 )}
-              </button>
-              <div className="ps-thumb__label">{doc.name}</div>
-            </div>
+              </span>
+              <span className="ps-previewcta__text">
+                <span className="ps-previewcta__name">{doc.name}</span>
+                <span className="ps-previewcta__hint">
+                  <i className="nxi nxi-eye" aria-hidden="true" />
+                  Click here to preview design
+                </span>
+              </span>
+            </button>
             <div className="ps-bottombar__spacer" />
             {price != null && <div className="ps-price">{price}</div>}
             <button type="button" className="ps-btn ps-btn--gold" onClick={onProcess}>

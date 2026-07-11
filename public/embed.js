@@ -228,15 +228,14 @@
         // the cart and order confirmation, but are visible to admins on the
         // order page. Shopify auto-linkifies URL values, so admins get
         // clickable Preview + Print file links on the line item.
+        // All keys are "_"-prefixed: hidden from the customer, visible to admins
+        // on the order. The shopper previews their design in the editor before
+        // checkout, so no customer-facing preview link is needed here.
         var properties = {
           "_Print file": p.printUrl,
           "_Preview": p.previewUrl,
           _template_id: p.templateId,
           _design_type: p.designType,
-          // No underscore = visible to the customer. Shopify auto-links URLs,
-          // so the shopper gets a clickable preview of their design in the
-          // cart, at checkout and in the confirmation email.
-          "Design preview": p.previewUrl,
         };
         if (p.customizationSummary) {
           properties.Customization = p.customizationSummary;

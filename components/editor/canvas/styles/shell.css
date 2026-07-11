@@ -482,8 +482,15 @@
   font-size: var(--ps-fs-sm); font-weight: 600; color: var(--ps-ink);
 }
 .ps-imgedit__removecolor .nxi { font-size: 15px; color: var(--ps-ink-2); }
-.ps-imgedit__thumb { height: 120px; display: grid; place-items: center; padding: 8px; }
-.ps-imgedit__thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ps-imgedit__thumb { height: 170px; display: grid; place-items: center; padding: 10px; }
+/* width/height 100% (not just max-*) so a small source image scales UP to fill
+   the box instead of rendering at its tiny natural size. */
+.ps-imgedit__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
 .ps-imgedit__actions { display: flex; border-top: 1px solid var(--ps-border); }
 .ps-imgedit__act {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -1047,11 +1054,19 @@
   place-items: center;
   min-height: 480px;
 }
+/* The host is the full Fabric canvas (print area + workspace margin). Its
+   children are absolutely positioned: the canvas fills it, while the print
+   surface and the cut/dimension guides are inset by the workspace margin. */
 .ps-canvas-host {
   position: relative;
-  display: grid;
-  place-items: center;
 }
+.ps-print-area {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+/* guides sit above the artwork */
+.ps-print-area--top { z-index: 2; }
 .ps-mockup {
   position: absolute;
   inset: 0;
@@ -1069,7 +1084,8 @@
   z-index: 0;
 }
 .ps-fabric-holder {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 1;
   line-height: 0;
 }
@@ -1117,16 +1133,49 @@
   overflow: hidden;
 }
 /* product image / live design preview */
-.ps-thumb {
-  padding: 0;
-  cursor: pointer;
-}
 .ps-thumb__img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
+
+/* bottom-bar "click to preview" call to action */
+.ps-previewcta {
+  display: flex;
+  align-items: center;
+  gap: var(--ps-sp-3);
+  background: var(--ps-surface);
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r);
+  padding: 6px 14px 6px 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--ps-ease), box-shadow var(--ps-ease);
+  font-family: var(--ps-font-ui);
+}
+.ps-previewcta:hover:not(:disabled) {
+  border-color: var(--ps-gold);
+  box-shadow: var(--ps-shadow-sm);
+}
+.ps-previewcta:disabled { cursor: default; opacity: 0.75; }
+.ps-previewcta__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ps-previewcta__name {
+  font-weight: 700;
+  font-size: var(--ps-fs-sm);
+  color: var(--ps-ink);
+  line-height: 1.2;
+}
+.ps-previewcta__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--ps-fs-xs);
+  color: var(--ps-gold);
+  line-height: 1.2;
+}
+.ps-previewcta:disabled .ps-previewcta__hint { color: var(--ps-muted); }
+.ps-previewcta__hint .nxi { font-size: 13px; }
 
 /* ---- Design preview modal ---- */
 .ps-preview {

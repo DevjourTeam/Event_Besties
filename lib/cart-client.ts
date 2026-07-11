@@ -64,10 +64,8 @@ export async function handoffDesign(payload: DesignReadyPayload): Promise<void> 
         { key: "_Preview", value: payload.previewUrl },
         { key: "_template_id", value: payload.templateId },
         { key: "_design_type", value: payload.designType },
-        // No underscore = shown to the customer. Shopify auto-links URLs, so
-        // this becomes a clickable "preview your design" link in the cart,
-        // checkout and order-confirmation email.
-        { key: "Design preview", value: payload.previewUrl },
+        // No customer-facing preview property: the shopper previews the design
+        // in the editor before checkout, so a link in the cart is redundant.
         ...(payload.customizationSummary
           ? [{ key: "Customization", value: payload.customizationSummary }]
           : []),

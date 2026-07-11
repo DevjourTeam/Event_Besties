@@ -20,7 +20,21 @@ import CanvasOverlayTools from './CanvasOverlayTools'
 // clearance (16px offset + 45px width), so the margin must exceed that. This
 // keeps every floating tool in the white gutter, never over the printable
 // canvas or a design placed near a corner — matching the reference.
-const MIN_PAD = 64
+// Workspace margin INSIDE the Fabric canvas, surrounding the printable area.
+// The Fabric canvas is (print + WORK_PAD*2); the print shape sits centred in it.
+//
+// This is what lets a customer hang an element off the print edge (bleed) while
+// its selection controls still render inside the canvas and stay usable —
+// anything outside the print shape is clipped on export.
+//
+// It doubles as the gutter the floating corner tools (undo/redo, zoom, edit,
+// clear-all) live in: they need ~61px of clearance, and this margin is
+// transparent, so they still never sit over the printable area.
+const WORK_PAD = 90
+
+// Keep an object's bounding box (plus room for its ~26px corner controls)
+// within the canvas, so the controls are always reachable.
+const CTRL_PAD = 26
 
 export default function CanvasStage() {
   const { doc } = useEditorState()
@@ -30,24 +44,31 @@ export default function CanvasStage() {
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
   const dimLabelRef = useRef(null)
-  const [box, setBox] = useState({ w: 0, h: 0 }) // current canvas px size
+  // printable area in px (the Fabric canvas is this + WORK_PAD*2)
+  const [box, setBox] = useState({ w: 0, h: 0 })
 
   // keep the latest doc reachable inside once-created Fabric event handlers
   const docRef = useRef(doc)
   docRef.current = doc
+  // latest print size, for px<->cm maths inside the once-created handlers
+  const printRef = useRef({ w: 0, h: 0 })
 
   // history (snapshots of canvas JSON)
   const undoStack = useRef([])
   const redoStack = useRef([])
   const restoringRef = useRef(false)
   const thumbTimer = useRef(null)
+  // true while a scratch object is on the canvas for export — suppresses the
+  // add/remove side effects (history, layers, thumbnail)
+  const exportingRef = useRef(false)
 
-  // ---- fit the canvas into the container, preserving doc aspect ----
+  // ---- fit the printable area into the container, preserving doc aspect ----
+  // The workspace margin is reserved on top, so the whole Fabric canvas fits.
   const computeFit = useCallback(() => {
     const wrap = wrapRef.current
     if (!wrap) return null
-    const availW = wrap.clientWidth - MIN_PAD * 2
-    const availH = wrap.clientHeight - MIN_PAD * 2
+    const availW = wrap.clientWidth - WORK_PAD * 2
+    const availH = wrap.clientHeight - WORK_PAD * 2
     if (availW <= 0 || availH <= 0) return null
     const aspect = doc.sizeCm.w / doc.sizeCm.h
     let w = availW
@@ -66,19 +87,23 @@ export default function CanvasStage() {
     const fc = new Canvas(el, {
       preserveObjectStacking: true,
       selection: true,
-      backgroundColor: '#ffffff',
+      // Transparent: the canvas is larger than the print area, so a background
+      // colour here would paint the workspace too. The printable surface is
+      // drawn as a DOM layer beneath the canvas, and re-added at export time.
+      backgroundColor: '',
       controlsAboveOverlay: true,
     })
     fabricRef.current = fc
 
-    // px → cm for the active object, using the current document size
+    // px → cm for the active object, measured against the PRINT area (not the
+    // larger canvas), so sizes stay truthful once elements can overflow.
     const objCm = (obj) => {
-      const cw = fc.getWidth() || 1
-      const ch = fc.getHeight() || 1
+      const pw = printRef.current.w || 1
+      const ph = printRef.current.h || 1
       const { w, h } = docRef.current.sizeCm
       return {
-        wCm: obj.getScaledWidth() * (w / cw),
-        hCm: obj.getScaledHeight() * (h / ch),
+        wCm: obj.getScaledWidth() * (w / pw),
+        hCm: obj.getScaledHeight() * (h / ph),
       }
     }
 
@@ -95,33 +120,32 @@ export default function CanvasStage() {
     // the untouched, full-resolution original source — used by the crop window
     const imgOrig = (o) => o.getSrc?.() || o._element?.src || null
 
-    // keep an element (and therefore its corner controls) inside the canvas/shape:
-    //  - cap its scale so it never exceeds the printable bounds
-    //  - clamp its position so no edge crosses the boundary
-    // padding leaves room for the 26px corner icons so they stay fully visible.
-    const BOUND_PAD = 20
+    // Overflow IS allowed: an element may hang off the print boundary (bleed) —
+    // anything outside the shape is simply clipped on export. What we must
+    // guarantee is that the element's selection controls stay reachable, so we
+    // clamp to the WORKSPACE (the whole Fabric canvas) rather than to the print
+    // area, leaving CTRL_PAD so the corner handles are never cut off.
     const constrainObject = (obj) => {
       if (!obj || obj.__chrome) return
-      // getBoundingRect() is in canvas space (zoom-independent), as is getWidth/Height
       const cw = fc.getWidth()
       const ch = fc.getHeight()
-      const maxW = cw - BOUND_PAD * 2
-      const maxH = ch - BOUND_PAD * 2
-      // cap scale (uniform — resize keeps aspect) so the object fits the bounds
+      const maxW = cw - CTRL_PAD * 2
+      const maxH = ch - CTRL_PAD * 2
+      // cap scale (uniform — resize keeps aspect) so the object still fits the
+      // workspace; without this its handles would leave the canvas entirely.
       if (obj.width && obj.height) {
         const maxScale = Math.min(maxW / obj.width, maxH / obj.height)
         if (obj.scaleX > maxScale) obj.scaleX = maxScale
         if (obj.scaleY > maxScale) obj.scaleY = maxScale
       }
       obj.setCoords()
-      // clamp position to keep the bounding box inside the boundary
       const r = obj.getBoundingRect()
       let { left, top } = obj
       let moved = false
-      if (r.left < BOUND_PAD) { left += BOUND_PAD - r.left; moved = true }
-      if (r.top < BOUND_PAD) { top += BOUND_PAD - r.top; moved = true }
-      if (r.left + r.width > cw - BOUND_PAD) { left += cw - BOUND_PAD - (r.left + r.width); moved = true }
-      if (r.top + r.height > ch - BOUND_PAD) { top += ch - BOUND_PAD - (r.top + r.height); moved = true }
+      if (r.left < CTRL_PAD) { left += CTRL_PAD - r.left; moved = true }
+      if (r.top < CTRL_PAD) { top += CTRL_PAD - r.top; moved = true }
+      if (r.left + r.width > cw - CTRL_PAD) { left += cw - CTRL_PAD - (r.left + r.width); moved = true }
+      if (r.top + r.height > ch - CTRL_PAD) { top += ch - CTRL_PAD - (r.top + r.height); moved = true }
       if (moved) { obj.set({ left, top }); obj.setCoords() }
     }
 
@@ -176,29 +200,89 @@ export default function CanvasStage() {
       api.setHistory(undoStack.current.length > 1, false)
     }
 
+    /**
+     * Render ONLY the printable area to a PNG.
+     *
+     * The Fabric canvas is larger than the print area (the workspace lets
+     * elements overflow), so every export crops back to the print rect. The
+     * canvas itself is transparent, so we temporarily drop in the printable
+     * surface (the shape, filled) behind the art — giving a shaped PNG:
+     * background inside the cut line, transparent outside it.
+     */
+    const renderPrint = ({ multiplier, maxEdge } = {}) => {
+      const { w: pw, h: ph } = printRef.current
+      if (!pw || !ph) return null
+      const d = docRef.current
+
+      let mult = multiplier
+      if (mult == null) {
+        const printPx = (d.sizeCm.w / 2.54) * d.dpi // real pixels at print DPI
+        mult = printPx / pw
+      }
+      if (maxEdge) {
+        const longest = Math.max(pw, ph) * mult
+        if (longest > maxEdge) mult *= maxEdge / longest
+      }
+
+      const bg = new Path(buildShapePath(d.shape, pw, ph), {
+        left: WORK_PAD,
+        top: WORK_PAD,
+        originX: 'left',
+        originY: 'top',
+        fill: d.background?.type === 'color' ? d.background.value : '#ffffff',
+        selectable: false,
+        evented: false,
+      })
+      bg.__chrome = true
+
+      // Suppress the add/remove handlers so this scratch object never lands in
+      // history, the layers list, or the thumbnail.
+      exportingRef.current = true
+      let url = null
+      try {
+        fc.insertAt(0, bg)
+        url = fc.toDataURL({
+          format: 'png',
+          multiplier: mult,
+          left: WORK_PAD,
+          top: WORK_PAD,
+          width: pw,
+          height: ph,
+        })
+      } catch {
+        url = null
+      } finally {
+        fc.remove(bg)
+        exportingRef.current = false
+        fc.requestRenderAll()
+      }
+      return url
+    }
+
     // Live design preview for the bottom bar. Debounced + tiny (long edge
     // ~160px) so re-rendering it on every edit stays cheap.
     const syncThumb = () => {
       clearTimeout(thumbTimer.current)
       thumbTimer.current = setTimeout(() => {
-        try {
-          const hasArt = fc.getObjects().some((o) => !o.__chrome)
-          if (!hasArt) return api.setThumb(null)
-          const longest = Math.max(fc.getWidth() || 1, fc.getHeight() || 1)
-          api.setThumb(
-            fc.toDataURL({ format: 'png', multiplier: Math.min(1, 160 / longest) })
-          )
-        } catch {
-          /* tainted canvas etc. — just leave the previous thumb */
-        }
+        const hasArt = fc.getObjects().some((o) => !o.__chrome)
+        if (!hasArt) return api.setThumb(null)
+        const { w: pw, h: ph } = printRef.current
+        const longest = Math.max(pw || 1, ph || 1)
+        api.setThumb(renderPrint({ multiplier: Math.min(1, 160 / longest) }))
       }, 250)
     }
 
     fc.on('selection:created', syncSelection)
     fc.on('selection:updated', syncSelection)
     fc.on('selection:cleared', syncSelection)
-    fc.on('object:added', () => { syncLayers(); pushHistory(); syncThumb() })
-    fc.on('object:removed', () => { syncLayers(); pushHistory(); updateDimLabel(); syncThumb() })
+    fc.on('object:added', () => {
+      if (exportingRef.current) return
+      syncLayers(); pushHistory(); syncThumb()
+    })
+    fc.on('object:removed', () => {
+      if (exportingRef.current) return
+      syncLayers(); pushHistory(); updateDimLabel(); syncThumb()
+    })
     fc.on('object:modified', (e) => { constrainObject(e.target); pushHistory(); syncSelection(); syncThumb() })
     fc.on('text:changed', syncThumb)
     // live dimension label + boundary constraint while moving / scaling / rotating
@@ -225,7 +309,8 @@ export default function CanvasStage() {
       addText: (text = 'Your text', opts = {}) => {
         const t = new IText(text, {
           fontFamily: 'Jost, sans-serif',
-          fontSize: Math.round((fabricRef.current?.getHeight() || 300) * 0.08),
+          // sized against the PRINT area, not the larger workspace canvas
+          fontSize: Math.round((printRef.current.h || 300) * 0.08),
           fill: '#1b2333',
           ...opts,
         })
@@ -249,7 +334,7 @@ export default function CanvasStage() {
           strokeUniform: true, // keep border width constant when scaling
           ...opts,
         })
-        const target = (fabricRef.current?.getWidth() || 400) * 0.42
+        const target = (printRef.current.w || 400) * 0.42
         p.scaleToWidth(target)
         p.__kind = 'shape'
         p.__name = 'Shape'
@@ -273,7 +358,7 @@ export default function CanvasStage() {
         }
         if (!obj) return null
         obj.set(opts)
-        const maxW = (fabricRef.current?.getWidth() || 300) * 0.6
+        const maxW = (printRef.current.w || 300) * 0.6
         if (obj.getScaledWidth() > maxW) obj.scaleToWidth(maxW)
         obj.__kind = 'image'
         obj.__name = 'Image'
@@ -313,21 +398,10 @@ export default function CanvasStage() {
           api.setHistory(undoStack.current.length > 1, redoStack.current.length > 0)
         })
       },
-      exportPNG: async (opts = {}) => {
-        // print-resolution multiplier: real pixels / on-screen pixels
-        const d = docRef.current
-        const curW = fabricRef.current?.getWidth() || 1
-        const curH = fabricRef.current?.getHeight() || 1
-        const printW = (d.sizeCm.w / 2.54) * d.dpi
-        let multiplier = printW / curW
-        // Optional cap on the longest exported edge — used when POSTing the PNG
-        // to the export API so the base64 body stays under serverless limits.
-        if (opts.maxEdge) {
-          const longest = Math.max(curW, curH) * multiplier
-          if (longest > opts.maxEdge) multiplier *= opts.maxEdge / longest
-        }
-        return fc.toDataURL({ format: 'png', multiplier })
-      },
+      // Renders the printable area at print DPI, cropping away the workspace.
+      // opts.maxEdge caps the longest edge (used when POSTing to the export API
+      // so the base64 body stays under serverless limits).
+      exportPNG: async (opts = {}) => renderPrint({ maxEdge: opts.maxEdge }),
       exportPDF: async () => {
         console.warn('exportPDF: not wired yet (Phase: export). Returns PNG for now.')
         return api.canvas.current.exportPNG()
@@ -439,11 +513,13 @@ export default function CanvasStage() {
       resizeSelectedCm: (wCm, hCm, lockAspect) => {
         const o = fc.getActiveObject()
         if (!o) return
-        const cw = fc.getWidth(), ch = fc.getHeight()
+        // cm maps to the PRINT area, not the larger workspace canvas
+        const pw = printRef.current.w || 1
+        const ph = printRef.current.h || 1
         const { w, h } = docRef.current.sizeCm
-        const sx = ((wCm * cw) / w) / o.width
+        const sx = ((wCm * pw) / w) / o.width
         o.scaleX = sx
-        o.scaleY = lockAspect ? sx : ((hCm * ch) / h) / o.height
+        o.scaleY = lockAspect ? sx : ((hCm * ph) / h) / o.height
         o.setCoords(); fc.requestRenderAll(); pushHistory(); syncSelection()
       },
 
@@ -603,34 +679,52 @@ export default function CanvasStage() {
     return () => ro.disconnect()
   }, [computeFit])
 
-  // ---- apply size + clip + background whenever box or doc changes ----
+  // ---- apply size + clip whenever box or doc changes ----
   useEffect(() => {
     const fc = fabricRef.current
     if (!fc || !box.w || !box.h) return
 
-    const prevW = fc.getWidth() || box.w
-    const ratio = box.w / prevW
+    const prevPrintW = printRef.current.w || box.w
+    const ratio = box.w / prevPrintW
+    printRef.current = { w: box.w, h: box.h }
 
-    fc.setDimensions({ width: box.w, height: box.h })
+    // The Fabric canvas is the print area PLUS the workspace margin, so an
+    // element can overflow the print edge and still show its controls.
+    const cw = box.w + WORK_PAD * 2
+    const ch = box.h + WORK_PAD * 2
+    const prevCx = (fc.getWidth() || cw) / 2
+    const prevCy = (fc.getHeight() || ch) / 2
 
-    // rescale existing user objects to keep their relative position/size
+    fc.setDimensions({ width: cw, height: ch })
+
+    // Rescale existing objects around the canvas centre (which is also the
+    // print-area centre, since the margin is symmetric).
     if (ratio !== 1 && Number.isFinite(ratio)) {
+      const cx = cw / 2
+      const cy = ch / 2
       fc.getObjects().forEach((o) => {
         o.scaleX *= ratio
         o.scaleY *= ratio
-        o.left *= ratio
-        o.top *= ratio
+        o.left = cx + (o.left - prevCx) * ratio
+        o.top = cy + (o.top - prevCy) * ratio
         o.setCoords()
       })
     }
 
-    // clip everything to the product shape
+    // Clip the artwork to the product shape, offset into the workspace. The
+    // overflow outside the shape is hidden on screen and cropped on export.
     const pathStr = buildShapePath(doc.shape, box.w, box.h)
-    fc.clipPath = new Path(pathStr, { absolutePositioned: true })
+    fc.clipPath = new Path(pathStr, {
+      absolutePositioned: true,
+      left: WORK_PAD,
+      top: WORK_PAD,
+      originX: 'left',
+      originY: 'top',
+    })
 
-    // background fill (full-bleed inside the shape)
-    fc.backgroundColor =
-      doc.background?.type === 'color' ? doc.background.value : '#ffffff'
+    // Canvas stays transparent — the printable surface is the DOM layer below,
+    // and it is re-created for the export in renderPrint().
+    fc.backgroundColor = ''
 
     fc.requestRenderAll()
   }, [box.w, box.h, doc.shape, doc.background])
@@ -638,43 +732,62 @@ export default function CanvasStage() {
   // ---- dimension + boundary overlay path (DOM SVG, non-interactive) ----
   const overlayPath = box.w && box.h ? buildShapePath(doc.shape, box.w, box.h) : ''
 
+  // The Fabric canvas (workspace) is the print area plus a margin on each side.
+  const canvasW = box.w ? box.w + WORK_PAD * 2 : 0
+  const canvasH = box.h ? box.h + WORK_PAD * 2 : 0
+  // Overlays that belong to the print area sit inset by the workspace margin.
+  const printAreaStyle = {
+    left: WORK_PAD,
+    top: WORK_PAD,
+    width: box.w,
+    height: box.h,
+  }
+  const surfaceFill =
+    doc.background?.type === 'color' ? doc.background.value : '#ffffff'
+
   return (
     <div className="ps-canvas-wrap" ref={wrapRef}>
       <CanvasOverlayTools />
-      <div className="ps-canvas-host" style={{ width: box.w, height: box.h }}>
+      <div className="ps-canvas-host" style={{ width: canvasW, height: canvasH }}>
         {/* product mockup photo behind everything (when a product provides one) */}
         {doc.mockup && (
           <img className="ps-mockup" src={doc.mockup} alt="" draggable={false} />
         )}
 
-        {/* print surface + soft shadow, BEHIND the canvas so it never covers content */}
+        {/* the printable surface, BELOW the canvas. The canvas itself is
+            transparent, so this is what makes the print area read as "the
+            product" while the surrounding workspace stays empty. */}
         {overlayPath && (
-          <svg
-            className="ps-surface-layer"
-            width={box.w}
-            height={box.h}
-            viewBox={`0 0 ${box.w} ${box.h}`}
-          >
-            <path d={overlayPath} className="ps-shape-surface" fill="#ffffff" />
-          </svg>
+          <div className="ps-print-area" style={printAreaStyle}>
+            <svg
+              className="ps-surface-layer"
+              width={box.w}
+              height={box.h}
+              viewBox={`0 0 ${box.w} ${box.h}`}
+            >
+              <path d={overlayPath} className="ps-shape-surface" fill={surfaceFill} />
+            </svg>
+          </div>
         )}
 
         {/* the live Fabric canvas — kept in its OWN wrapper so React never
             inserts sibling overlays around the node Fabric relocates */}
         <div className="ps-fabric-holder">
-          <canvas ref={canvasElRef} width={box.w} height={box.h} />
+          <canvas ref={canvasElRef} width={canvasW} height={canvasH} />
           <div className="ps-dim-tag" ref={dimLabelRef} style={{ display: 'none' }} />
         </div>
 
         {/* boundary + dimension guides ABOVE the canvas (non-interactive) */}
         {overlayPath && (
-          <DimensionOverlay
-            w={box.w}
-            h={box.h}
-            path={overlayPath}
-            widthCm={doc.sizeCm.w}
-            heightCm={doc.sizeCm.h}
-          />
+          <div className="ps-print-area ps-print-area--top" style={printAreaStyle}>
+            <DimensionOverlay
+              w={box.w}
+              h={box.h}
+              path={overlayPath}
+              widthCm={doc.sizeCm.w}
+              heightCm={doc.sizeCm.h}
+            />
+          </div>
         )}
       </div>
     </div>
