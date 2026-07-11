@@ -1140,42 +1140,6 @@
   display: block;
 }
 
-/* bottom-bar "click to preview" call to action */
-.ps-previewcta {
-  display: flex;
-  align-items: center;
-  gap: var(--ps-sp-3);
-  background: var(--ps-surface);
-  border: 1px solid var(--ps-border);
-  border-radius: var(--ps-r);
-  padding: 6px 14px 6px 6px;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color var(--ps-ease), box-shadow var(--ps-ease);
-  font-family: var(--ps-font-ui);
-}
-.ps-previewcta:hover:not(:disabled) {
-  border-color: var(--ps-gold);
-  box-shadow: var(--ps-shadow-sm);
-}
-.ps-previewcta:disabled { cursor: default; opacity: 0.75; }
-.ps-previewcta__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ps-previewcta__name {
-  font-weight: 700;
-  font-size: var(--ps-fs-sm);
-  color: var(--ps-ink);
-  line-height: 1.2;
-}
-.ps-previewcta__hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--ps-fs-xs);
-  color: var(--ps-gold);
-  line-height: 1.2;
-}
-.ps-previewcta:disabled .ps-previewcta__hint { color: var(--ps-muted); }
-.ps-previewcta__hint .nxi { font-size: 13px; }
 
 /* ---- Design preview modal ---- */
 .ps-preview {
