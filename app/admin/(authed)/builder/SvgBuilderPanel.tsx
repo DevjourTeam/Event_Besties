@@ -1,41 +1,44 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SVGUploader } from "@/components/admin/SVGUploader";
-import { SVGValidator } from "@/components/admin/SVGValidator";
-import { PermissionEditor } from "@/components/admin/PermissionEditor";
+import {
+  TemplateFieldEditor,
+  unmappedFonts,
+} from "@/components/admin/TemplateFieldEditor";
 import {
   CreateProductModal,
   type CreateProductSuccess,
 } from "@/components/admin/CreateProductModal";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
-import type { SvgValidation } from "@/lib/svg-parser";
-import { deriveLabel } from "@/lib/svg-parser";
-import { checkFonts } from "@/lib/google-fonts";
-import type { ElementPermission, TemplateConfig } from "@/lib/types";
+import { prepareSvg, composeSvg, type PreparedTemplate } from "@/lib/svg-template";
+import { googleFontsHrefFor } from "@/lib/google-fonts";
+import type {
+  TemplateConfig,
+  TemplateTextField,
+  TemplateColorSlot,
+} from "@/lib/types";
 import { CopyIcon } from "@/components/admin/Icons";
 
-type Permissions = Record<string, ElementPermission>;
-
-function svgTextToDataUrl(svgText: string): string {
-  try {
-    const base64 = btoa(unescape(encodeURIComponent(svgText)));
-    return `data:image/svg+xml;base64,${base64}`;
-  } catch {
-    return "";
-  }
-}
-
+/**
+ * Template builder — v2.
+ *
+ * The admin uploads whatever Illustrator gave them. We read the <text> elements
+ * and fill colours out of it directly, so there is nothing to name and no export
+ * setting to get right. The one thing the artwork must have is live type: text
+ * converted to outlines is paths, and no amount of parsing brings it back — that
+ * case is reported as fatal rather than shipped as a template nobody can edit.
+ */
 export function SvgBuilderPanel() {
   const toast = useToast();
   const router = useRouter();
 
   const [fileName, setFileName] = useState<string | null>(null);
-  const [svgText, setSvgText] = useState<string>("");
-  const [validation, setValidation] = useState<SvgValidation | null>(null);
-  const [permissions, setPermissions] = useState<Permissions>({});
+  const [prepared, setPrepared] = useState<PreparedTemplate | null>(null);
+  const [textFields, setTextFields] = useState<TemplateTextField[]>([]);
+  const [colorSlots, setColorSlots] = useState<TemplateColorSlot[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -43,76 +46,110 @@ export function SvgBuilderPanel() {
   const handleLoaded = ({
     fileName,
     svgText,
-    validation,
   }: {
     fileName: string;
     svgText: string;
-    validation: SvgValidation;
   }) => {
+    const result = prepareSvg(svgText);
     setFileName(fileName);
-    setSvgText(svgText);
-    setValidation(validation);
-    const initial: Permissions = {};
-    for (const el of validation.elements) {
-      initial[el.id] = {
-        type: "locked",
-        label: deriveLabel(el.id),
-        locked: true,
-      };
-    }
-    setPermissions(initial);
+    setPrepared(result);
+    setTextFields(result.textFields);
+    setColorSlots(result.colorSlots);
   };
 
-  const buildConfig = (productName: string, priceLabel: string): TemplateConfig | null => {
-    if (!validation?.valid) return null;
+  const missing = useMemo(() => unmappedFonts(textFields), [textFields]);
+  const ready = !!prepared && !prepared.fatal && missing.length === 0;
+
+  /* The preview must tell the truth, which means rendering in the fonts the
+   * customer will actually get — not the ones Illustrator used. Load exactly the
+   * families the admin has mapped so far, and nothing else. */
+  const mappedFonts = useMemo(
+    () => [...new Set(textFields.map((f) => f.fontFamily).filter(Boolean))],
+    [textFields]
+  );
+
+  useEffect(() => {
+    const href = googleFontsHrefFor(mappedFonts);
+    if (!href) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+    return () => link.remove();
+  }, [mappedFonts]);
+
+  /* Live preview: the same composeSvg the customer editor and the print
+   * renderer call, so what the admin sees here is what everyone downstream
+   * gets. */
+  const previewSvg = useMemo(() => {
+    if (!prepared?.preparedSvg) return "";
+    try {
+      return composeSvg(prepared.preparedSvg, {
+        textFields: textFields.map((f) => ({
+          nodeId: f.nodeId,
+          fontFamily: f.fontFamily,
+          fontSize: f.fontSize,
+          fill: f.fill,
+        })),
+        textValues: Object.fromEntries(textFields.map((f) => [f.nodeId, f.value])),
+        colorValues: Object.fromEntries(
+          colorSlots.filter((c) => c.exposed).map((c) => [c.nodeId, c.hex])
+        ),
+      });
+    } catch {
+      return prepared.preparedSvg;
+    }
+  }, [prepared, textFields, colorSlots]);
+
+  const buildConfig = (
+    productName: string,
+    priceLabel: string,
+    sourceSvgUrl: string
+  ): TemplateConfig | null => {
+    if (!prepared || prepared.fatal) return null;
     return {
       type: "template",
+      version: 2,
       templateId: `tpl_${Date.now().toString(36)}`,
       productName,
-      svgUrl: "",
-      canvasWidth: Math.round(validation.width),
-      canvasHeight: Math.round(validation.height),
-      permissions,
+      // v1 fields kept populated so anything still reading them keeps working.
+      svgUrl: sourceSvgUrl,
+      permissions: {},
+      sourceSvgUrl,
+      canvasWidth: prepared.width,
+      canvasHeight: prepared.height,
+      textFields,
+      colorSlots,
+      requiredFonts: mappedFonts,
       price: priceLabel,
       status: "published",
       createdAt: new Date().toISOString().slice(0, 10),
-      requiredFonts: validation.fonts,
     };
   };
 
-  const fontChecks = useMemo(
-    () => (validation?.fonts ? checkFonts(validation.fonts) : []),
-    [validation?.fonts]
-  );
-  const missingFonts = fontChecks.filter((c) => !c.available);
-
-  const previewConfig = useMemo(
-    () => buildConfig("Untitled Template", "£0"),
+  const configJson = useMemo(() => {
+    const c = buildConfig("Untitled Template", "£0", "");
+    return c ? JSON.stringify(c, null, 2) : "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [validation, permissions]
-  );
-  const json = previewConfig ? JSON.stringify(previewConfig, null, 2) : "";
+  }, [prepared, textFields, colorSlots, mappedFonts]);
 
   const copyJson = async () => {
-    if (!json) return;
+    if (!configJson) return;
     try {
-      await navigator.clipboard.writeText(json);
-      toast.show("Permission JSON copied");
+      await navigator.clipboard.writeText(configJson);
+      toast.show("Config copied");
     } catch {
       toast.show("Copy failed");
     }
   };
 
-  const previewInEditor = () => {
-    if (!previewConfig) return;
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(previewConfig))));
-    window.open(`/editor/preview?config=${encoded}`, "_blank");
-  };
-
   const openCreateModal = () => {
-    if (!validation?.valid || !svgText) {
-      toast.show("Upload a valid SVG first");
-      return;
+    if (!prepared) return toast.show("Upload an SVG first");
+    if (prepared.fatal) return toast.show(prepared.fatal);
+    if (missing.length) {
+      return toast.show(
+        `Map a Google Font for: ${missing.map((f) => f.label).join(", ")}`
+      );
     }
     setModalOpen(true);
   };
@@ -123,24 +160,33 @@ export function SvgBuilderPanel() {
     priceGbp: number;
     imageDataUrl: string | null;
   }): Promise<CreateProductSuccess | { error: string }> => {
+    if (!prepared) return { error: "No SVG loaded" };
     setPublishing(true);
     try {
-      // 1) upload SVG to Cloudinary
+      // Upload the PREPARED svg — the one carrying data-tf / data-cs markers.
+      // This is the pristine source the print renderer composes from, so it has
+      // to be what we store, not the raw file the admin dropped in.
       const fd = new FormData();
       fd.append(
         "file",
-        new File([svgText], fileName ?? "template.svg", { type: "image/svg+xml" })
+        new File([prepared.preparedSvg], fileName ?? "template.svg", {
+          type: "image/svg+xml",
+        })
       );
-      const upRes = await fetch("/api/admin/upload-svg", { method: "POST", body: fd });
+      const upRes = await fetch("/api/admin/upload-svg", {
+        method: "POST",
+        body: fd,
+      });
       const upJson = await upRes.json();
       if (!upRes.ok) return { error: upJson.error ?? "SVG upload failed" };
 
-      // 2) build config using modal fields
-      const config = buildConfig(fields.title, `£${fields.priceGbp.toFixed(2)}`);
-      if (!config) return { error: "Invalid SVG validation state" };
-      const finalConfig: TemplateConfig = { ...config, svgUrl: upJson.svgUrl };
+      const config = buildConfig(
+        fields.title,
+        `£${fields.priceGbp.toFixed(2)}`,
+        upJson.svgUrl
+      );
+      if (!config) return { error: "Invalid template state" };
 
-      // 3) create Shopify product + write metafield
       const createRes = await fetch("/api/admin/create-product", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,7 +196,7 @@ export function SvgBuilderPanel() {
           description: fields.description,
           priceGbp: fields.priceGbp,
           imageDataUrl: fields.imageDataUrl,
-          config: finalConfig,
+          config,
         }),
       });
       const createJson = await createRes.json();
@@ -165,11 +211,10 @@ export function SvgBuilderPanel() {
         imageError: createJson.imageError ?? null,
       };
 
-      const msg = success.imageError
-        ? `Created "${success.title}" — image failed: ${success.imageError}`
-        : `Created "${success.title}" in Shopify`;
       toast.show({
-        message: msg,
+        message: success.imageError
+          ? `Created "${success.title}" — image failed: ${success.imageError}`
+          : `Created "${success.title}" in Shopify`,
         actions: [
           { label: "View in Shopify", href: success.adminUrl },
           { label: "Dashboard", onClick: () => router.push("/admin/dashboard") },
@@ -184,100 +229,77 @@ export function SvgBuilderPanel() {
     }
   };
 
-  const svgDataUrl = svgText ? svgTextToDataUrl(svgText) : "";
-
   return (
     <div className="flex min-h-[calc(100vh-180px)]">
-      {/* LEFT — 340px form column */}
+      {/* LEFT — form column */}
       <div className="w-[340px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-5">
         <SVGUploader onLoaded={handleLoaded} />
 
-        {validation && fileName && (
-          <SVGValidator fileName={fileName} validation={validation} />
+        {prepared?.fatal && (
+          <div className="bg-white border border-[#f1cccc] rounded-card p-4">
+            <div className="text-[11px] tracking-[0.16em] uppercase text-text-muted mb-1">
+              {fileName}
+            </div>
+            <p className="text-[12px] text-[#a83232] leading-relaxed">
+              {prepared.fatal}
+            </p>
+          </div>
         )}
 
-        {validation?.valid && fontChecks.length > 0 && (
-          <div>
-            <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
-              Detected fonts
+        {prepared && !prepared.fatal && (
+          <div className="bg-white border border-card-border rounded-card p-4 space-y-1.5">
+            <div className="text-[11px] tracking-[0.16em] uppercase text-text-muted mb-1">
+              {fileName}
             </div>
-            <div className="space-y-1.5">
-              {fontChecks.map((c) => (
-                <div
-                  key={c.family}
-                  className={`flex items-center gap-2 text-[12px] px-2.5 py-1.5 rounded-md border ${
-                    c.available
-                      ? "bg-[#e8f4ea] border-[#c9e2cf] text-[#2a7a3c]"
-                      : "bg-[#fdf3e1] border-[#f1ddb3] text-[#a06b1c]"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      c.available ? "bg-[#2a7a3c]" : "bg-[#a06b1c]"
-                    }`}
-                  />
-                  <span className="flex-1 truncate">{c.family}</span>
-                  <span className="text-[10px] uppercase tracking-[0.06em] opacity-70">
-                    {c.available ? "Google Font" : "Not on Google"}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {missingFonts.length > 0 && (
-              <p className="text-[10px] text-text-muted mt-2 leading-relaxed">
-                Text using a non–Google Font will fall back to a default in
-                the customer editor. Pick a Google Font in Illustrator
-                (Pacifico, Bungee, Lobster…) or convert the text to outlines
-                to make it non-editable but pixel-perfect.
+            <Stat label="Canvas" value={`${prepared.width} × ${prepared.height} px`} />
+            <Stat label="Text fields" value={`${prepared.textFields.length}`} />
+            <Stat label="Colours" value={`${prepared.colorSlots.length}`} />
+          </div>
+        )}
+
+        {prepared && !prepared.fatal && (
+          <TemplateFieldEditor
+            textFields={textFields}
+            colorSlots={colorSlots}
+            onTextChange={setTextFields}
+            onColorChange={setColorSlots}
+          />
+        )}
+
+        {prepared && !prepared.fatal && (
+          <div className="border-t border-card-border pt-5 space-y-3">
+            {missing.length > 0 && (
+              <p className="text-[11px] text-[#a06b1c] bg-[#fdf3e1] border border-[#f1ddb3] rounded-md px-2.5 py-2 leading-relaxed">
+                Pick a Google Font for{" "}
+                <strong>{missing.map((f) => f.label).join(", ")}</strong> before
+                creating the product — the editor can&rsquo;t render anything else.
               </p>
             )}
-          </div>
-        )}
-
-        {validation?.valid && (
-          <div>
-            <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
-              Element permissions
-            </div>
-            <PermissionEditor
-              elements={validation.elements}
-              permissions={permissions}
-              onChange={setPermissions}
-            />
-          </div>
-        )}
-
-        {validation?.valid && (
-          <div className="border-t border-card-border pt-5 space-y-3">
             <button
               type="button"
               onClick={openCreateModal}
-              disabled={publishing}
+              disabled={publishing || !ready}
               className="w-full h-11 rounded-lg bg-gold hover:bg-gold-hover text-white text-[13px] font-semibold tracking-[0.02em] disabled:opacity-60 inline-flex items-center justify-center gap-2"
             >
               {publishing && <Spinner size={14} />}
               {publishing ? "Creating…" : "Create Shopify product"}
             </button>
-            <p className="text-[10px] text-text-muted leading-relaxed text-center">
-              Enter product details in the next step.
-            </p>
           </div>
         )}
       </div>
 
-      {/* RIGHT — preview + JSON */}
+      {/* RIGHT — preview + config */}
       <div className="flex-1 min-w-0 overflow-y-auto p-8 space-y-6">
         <div>
           <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
-            SVG preview
+            Preview — as the customer will see it
           </div>
           <div className="bg-white border border-card-border rounded-card p-6 flex items-center justify-center min-h-[300px]">
-            {svgDataUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={svgDataUrl}
-                alt="uploaded SVG preview"
-                className="max-w-full max-h-[380px] object-contain"
+            {previewSvg ? (
+              <div
+                className="[&>svg]:max-w-full [&>svg]:max-h-[420px] [&>svg]:h-auto [&>svg]:w-auto"
+                // Safe: prepareSvg strips <script>, on* handlers and javascript: hrefs.
+                dangerouslySetInnerHTML={{ __html: previewSvg }}
               />
             ) : (
               <div className="text-[12px] text-text-muted">
@@ -290,29 +312,19 @@ export function SvgBuilderPanel() {
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
-              Permission JSON
+              Template config
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={copyJson}
-                disabled={!json}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface disabled:opacity-50"
-              >
-                <CopyIcon size={13} /> Copy
-              </button>
-              <button
-                type="button"
-                onClick={previewInEditor}
-                disabled={!previewConfig}
-                className="inline-flex items-center h-8 px-3 rounded-md bg-[#1b2333] text-white text-[11px] hover:bg-black disabled:opacity-50"
-              >
-                Preview in Editor
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={copyJson}
+              disabled={!configJson}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface disabled:opacity-50"
+            >
+              <CopyIcon size={13} /> Copy
+            </button>
           </div>
           <pre className="bg-code-bg text-code-text text-[11px] font-mono leading-relaxed rounded-lg p-4 max-h-[420px] overflow-auto">
-            {json || "// Upload an SVG to generate config"}
+            {configJson || "// Upload an SVG to generate config"}
           </pre>
         </div>
       </div>
@@ -322,6 +334,15 @@ export function SvgBuilderPanel() {
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreate}
       />
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-[12px]">
+      <span className="text-text-muted">{label}</span>
+      <span className="text-[#1b2333] font-medium">{value}</span>
     </div>
   );
 }

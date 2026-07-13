@@ -1,14 +1,31 @@
 import { NextResponse } from "next/server";
-import { renderTemplateSVG, renderFabricJSON } from "@/lib/canvas-export";
+import {
+  renderTemplateSVG,
+  renderFabricJSON,
+  renderTemplateV2,
+} from "@/lib/canvas-export";
 import { uploadJPEG, uploadPNG } from "@/lib/cloudinary";
+import { getProductMetafield } from "@/lib/shopify-admin";
+import { isTemplateV2, type TemplateConfig } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
+/** Nothing legitimate needs more; the cap exists so a field can't be used as a payload. */
+const MAX_TEXT_LEN = 500;
+
 type ExportBody = {
   type: "template" | "canvas";
   templateId: string;
+  /** v2 only. Present => take the composed path and ignore any svgString. */
+  version?: 2;
+  /** v2 only. The Shopify product to read the pristine template back from. */
+  productId?: string;
+  /** v2 only. nodeId -> customer text. */
+  textValues?: Record<string, string>;
+  /** v2 only. nodeId -> customer colour. */
+  colorValues?: Record<string, string>;
   svgString?: string;
   fabricJSON?: unknown;
   /** Canvas mode: a client-rendered print PNG data URL (WYSIWYG). Preferred. */
@@ -21,6 +38,68 @@ type ExportBody = {
   printHeightCm?: number;
   fonts?: string[];
 };
+
+/**
+ * Build the print for a v2 template.
+ *
+ * The whole point of this function is what it does NOT read from the request:
+ * no artwork, no fonts, no geometry, no notion of which fields are editable.
+ * All of that is re-read from the template stored against the Shopify product.
+ * The request contributes values, and only for fields the stored config marks
+ * editable — so a customer editing the DOM in devtools changes their screen and
+ * nothing else.
+ */
+async function renderV2(body: ExportBody): Promise<Buffer> {
+  if (!body.productId) throw new Error("Missing productId");
+
+  const config = await getProductMetafield<TemplateConfig>(
+    body.productId,
+    "custom",
+    "template_config"
+  );
+  if (!config) throw new Error("Template not found");
+  if (!isTemplateV2(config)) throw new Error("Not a v2 template");
+
+  const res = await fetch(config.sourceSvgUrl);
+  if (!res.ok) throw new Error(`Could not load template artwork (${res.status})`);
+  const preparedSvg = await res.text();
+
+  // Accept a value only where OUR config says the field is editable.
+  const textValues: Record<string, string> = {};
+  for (const f of config.textFields) {
+    if (!f.editable) continue;
+    const v = body.textValues?.[f.nodeId];
+    textValues[f.nodeId] = (typeof v === "string" ? v : f.value).slice(
+      0,
+      MAX_TEXT_LEN
+    );
+  }
+
+  // Same for colour, and only in a shape a colour can legally take.
+  const colorValues: Record<string, string> = {};
+  for (const s of config.colorSlots) {
+    if (!s.exposed) continue;
+    const v = body.colorValues?.[s.nodeId];
+    colorValues[s.nodeId] = /^#[0-9a-fA-F]{6}$/.test(v ?? "") ? (v as string) : s.hex;
+  }
+
+  return renderTemplateV2(
+    preparedSvg,
+    {
+      textFields: config.textFields.map((f) => ({
+        nodeId: f.nodeId,
+        fontFamily: f.fontFamily,
+        fontSize: f.fontSize,
+        fill: f.fill,
+      })),
+      textValues,
+      colorValues,
+    },
+    config.canvasWidth,
+    config.canvasHeight,
+    config.requiredFonts
+  );
+}
 
 /**
  * POST /api/editor/export
@@ -47,7 +126,11 @@ export async function POST(req: Request) {
 
   try {
     let pngBuffer: Buffer;
-    if (body.type === "template") {
+    if (body.type === "template" && body.version === 2) {
+      // Composed server-side from the stored template. svgString is ignored
+      // here even if present — see renderV2.
+      pngBuffer = await renderV2(body);
+    } else if (body.type === "template") {
       if (!body.svgString) {
         return NextResponse.json({ error: "Missing svgString" }, { status: 400 });
       }

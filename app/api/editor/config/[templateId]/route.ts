@@ -36,8 +36,10 @@ export async function GET(
     if (!config) {
       return NextResponse.json({ error: "Not configured" }, { status: 404 });
     }
-    // The editor shows this as the product thumbnail in its bottom bar.
-    return NextResponse.json({ ...config, productImage }, {
+    // The editor shows productImage as the thumbnail in its bottom bar, and
+    // sends productId back at print time so the server can re-read this same
+    // config from Shopify rather than trusting artwork posted by the browser.
+    return NextResponse.json({ ...config, productImage, productId: templateId }, {
       headers: {
         // Loose CORS so embed.js on a Shopify domain can call us.
         "Access-Control-Allow-Origin": "*",

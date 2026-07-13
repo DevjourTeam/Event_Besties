@@ -10,6 +10,45 @@ export type ElementPermission = {
   locked: boolean;
 };
 
+/**
+ * One editable line of type, discovered by reading the SVG's <text> elements.
+ * There is no naming convention to follow: `nodeId` is a marker the builder
+ * writes into the SVG at upload, so nothing depends on how Illustrator was set up.
+ *
+ * `fontFamily` is the Google family the editor will actually render.
+ * `originalFont` is whatever Illustrator wrote — kept only so the admin can see
+ * what they were remapping away from.
+ */
+export type TemplateTextField = {
+  /** Marker written into the SVG as data-tf, e.g. "tf0". */
+  nodeId: string;
+  label: string;
+  /** False = baked in, customer never sees a control for it. */
+  editable: boolean;
+  /** The copy as it appears in the artwork; the editor's starting value. */
+  value: string;
+  fontFamily: string;
+  originalFont: string;
+  fontSize: number;
+  fill: string;
+};
+
+/**
+ * A colour the customer may change. Slots are keyed by the fill value itself,
+ * not by element — expose "#E8506E" once and every strawberry follows. That is
+ * how designers already think, and it needs no layer naming.
+ */
+export type TemplateColorSlot = {
+  /** Marker written into the SVG as data-cs, e.g. "cs0". */
+  nodeId: string;
+  label: string;
+  /** The colour as authored, and the editor's starting value. */
+  hex: string;
+  exposed: boolean;
+  /** How many elements use this fill — shown to the admin, not the customer. */
+  count: number;
+};
+
 export type TemplateConfig = {
   type: "template";
   templateId: string;
@@ -28,7 +67,38 @@ export type TemplateConfig = {
    * backward compatibility with pre-fonts templates.
    */
   requiredFonts?: string[];
+
+  /* ---------------------------------------------------------------------
+   * v2 — auto-extracted fields. Present only on templates built with the
+   * new builder. Absent (undefined) on v1 templates, which keep running
+   * through the original permissions path untouched. `permissions` stays
+   * required and is written as {} on v2 so nothing that reads it breaks.
+   * ------------------------------------------------------------------ */
+
+  /** Discriminator. `undefined` means v1. */
+  version?: 2;
+  /**
+   * The prepared SVG: the original artwork with data-tf / data-cs markers
+   * injected. Styling is untouched, so it renders identically to what the
+   * admin exported. This is the pristine source the SERVER recomposes from
+   * at print time — it never trusts SVG sent up by the browser.
+   */
+  sourceSvgUrl?: string;
+  textFields?: TemplateTextField[];
+  colorSlots?: TemplateColorSlot[];
 };
+
+/** True when this template was built by the v2 (auto-extract) builder. */
+export function isTemplateV2(
+  c: TemplateConfig
+): c is TemplateConfig & {
+  version: 2;
+  sourceSvgUrl: string;
+  textFields: TemplateTextField[];
+  colorSlots: TemplateColorSlot[];
+} {
+  return c.version === 2 && typeof c.sourceSvgUrl === "string" && !!c.textFields;
+}
 
 /**
  * Product cut shape for a canvas. Named presets are generated geometrically by
@@ -95,8 +165,16 @@ export type CanvasConfig = {
 /**
  * Fields the config API adds on top of the stored metafield (not persisted).
  * `productImage` is the product's featured image, used as the editor thumbnail.
+ * `productId` is the Shopify product the config was read from — the v2 print
+ * path sends it back so the server can re-fetch the pristine config itself
+ * instead of trusting artwork uploaded by the browser. Note this is NOT
+ * `config.templateId`, which is our own `tpl_…` handle and cannot address a
+ * Shopify metafield.
  */
-export type WithProductImage<T> = T & { productImage?: string | null };
+export type WithProductImage<T> = T & {
+  productImage?: string | null;
+  productId?: string;
+};
 
 export type AnyConfig = TemplateConfig | CanvasConfig;
 

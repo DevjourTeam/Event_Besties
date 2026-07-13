@@ -13,6 +13,7 @@
  */
 
 import type { Browser } from "puppeteer-core";
+import { composeSvg, type ComposeSpec } from "./svg-template";
 
 async function launchBrowser(): Promise<Browser> {
   const isServerless =
@@ -64,6 +65,78 @@ function googleFontsLinkTag(fonts: string[] | undefined): string {
     .join("&");
   const href = `https://fonts.googleapis.com/css2?${params}&display=block`;
   return `<link rel="stylesheet" href="${href}">`;
+}
+
+/**
+ * Template v2 print render.
+ *
+ * Takes the PREPARED svg (fetched server-side from the stored template, never
+ * from the request) plus a spec built out of the stored config, and composes the
+ * artwork inside the page before screenshotting it. The browser that the
+ * customer used sent values, not artwork — so a tampered DOM can change what
+ * they saw on screen but has no path to what gets printed.
+ *
+ * composeSvg is shipped into the page by source. It is written to be
+ * self-contained precisely so this works: the customer's preview and this print
+ * run the identical implementation and cannot drift.
+ */
+export async function renderTemplateV2(
+  preparedSvg: string,
+  spec: ComposeSpec,
+  width: number,
+  height: number,
+  fonts?: string[]
+): Promise<Buffer> {
+  const browser = await launchBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({
+      width: Math.max(1, Math.ceil(width)),
+      height: Math.max(1, Math.ceil(height)),
+      deviceScaleFactor: clampScaleFactor(width, height),
+    });
+
+    const html = `<!doctype html><html><head><meta charset="utf-8">${googleFontsLinkTag(
+      fonts
+    )}<style>
+html,body{margin:0;padding:0;background:#ffffff;}
+svg{display:block;width:${width}px;height:${height}px;}
+</style></head><body></body></html>`;
+    await page.setContent(html, { waitUntil: "networkidle0" });
+
+    await page.evaluate(
+      (src: string, svg: string, s: ComposeSpec, w: number, h: number) => {
+        const compose = new Function(`return (${src})`)() as (
+          a: string,
+          b: ComposeSpec
+        ) => string;
+        document.body.innerHTML = compose(svg, s);
+        const el = document.querySelector("svg");
+        if (el) {
+          el.setAttribute("width", String(w));
+          el.setAttribute("height", String(h));
+        }
+      },
+      composeSvg.toString(),
+      preparedSvg,
+      spec,
+      width,
+      height
+    );
+
+    // Without this Puppeteer can screenshot before the Google Font lands, which
+    // silently prints the fallback face.
+    if (fonts && fonts.length) {
+      await page.evaluate(() =>
+        (document as Document & { fonts: { ready: Promise<unknown> } }).fonts.ready
+      );
+    }
+
+    const shot = await page.screenshot({ type: "png", fullPage: false });
+    return Buffer.from(shot);
+  } finally {
+    await browser.close();
+  }
 }
 
 export async function renderTemplateSVG(
