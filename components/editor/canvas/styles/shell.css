@@ -1354,63 +1354,78 @@
 .ps-qr__add { justify-content: center; }
 
 /* ======================= backgrounds panel ======================= */
+.ps-bgpanel { gap: var(--ps-sp-2); }
+
+.ps-bgsearchrow { display: flex; gap: 8px; align-items: center; }
 .ps-bgsearch {
-  width: 100%; background: var(--ps-surface);
-  border: 1px solid var(--ps-border); border-radius: var(--ps-r-sm);
-  padding: 9px 12px; font-family: var(--ps-font-ui); font-size: var(--ps-fs-sm); color: var(--ps-ink);
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  background: var(--ps-surface); border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); padding: 0 10px; color: var(--ps-muted);
 }
+.ps-bgsearch input {
+  flex: 1; border: none; outline: none; background: transparent;
+  padding: 8px 0; font-family: var(--ps-font-ui);
+  font-size: var(--ps-fs-sm); color: var(--ps-ink);
+}
+.ps-bgfilter {
+  flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center;
+  background: var(--ps-surface); border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); color: var(--ps-ink-2); cursor: pointer;
+}
+.ps-bgfilter:hover { border-color: var(--ps-border-2); }
+
 .ps-bgtabs {
   display: grid; grid-template-columns: 1fr 1fr;
   background: var(--ps-surface-2); border: 1px solid var(--ps-border);
   border-radius: var(--ps-r-sm); padding: 3px;
 }
 .ps-bgtab {
-  border: none; background: transparent; cursor: pointer; padding: 7px 10px; border-radius: 6px;
+  border: none; background: transparent; cursor: pointer; padding: 6px 10px; border-radius: 6px;
   font-family: var(--ps-font-ui); font-weight: 600; font-size: var(--ps-fs-sm); color: var(--ps-muted);
 }
 .ps-bgtab.is-active { background: var(--ps-surface); color: var(--ps-ink); box-shadow: var(--ps-shadow-sm); }
-.ps-bggrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+
+/* compact, scrollable swatch grid (matches the reference: ~3 visible rows) */
+.ps-bggrid {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px;
+  max-height: 122px; overflow-y: auto; padding-right: 4px;
+}
 .ps-bgcell {
-  aspect-ratio: 1 / 1; border: 2px solid var(--ps-border); border-radius: var(--ps-r-sm);
-  cursor: pointer; transition: border-color var(--ps-ease), transform var(--ps-ease);
+  aspect-ratio: 1 / 1; border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); cursor: pointer; padding: 0;
+  transition: border-color var(--ps-ease), transform var(--ps-ease);
 }
 .ps-bgcell:hover { transform: translateY(-1px); border-color: var(--ps-border-2); }
 .ps-bgcell.is-active { border-color: var(--ps-gold); box-shadow: var(--ps-shadow-sm); }
-.ps-bgcustom {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: var(--ps-fs-sm); font-weight: 600; color: var(--ps-ink);
-  background: var(--ps-surface); border: 1px solid var(--ps-border);
-  border-radius: var(--ps-r-sm); padding: 8px 12px;
-}
-.ps-bgcustom input[type='color'], .ps-qr__field--row input[type='color'] {
-  width: 40px; height: 28px; border: 1px solid var(--ps-border);
-  border-radius: var(--ps-r-sm); background: none; cursor: pointer; padding: 0;
-}
+
 .ps-bgupload {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; background: #2f6fed; color: #fff; border: none;
-  border-radius: var(--ps-r-sm); padding: 11px 14px; cursor: pointer;
+  border-radius: var(--ps-r-sm); padding: 10px 14px; cursor: pointer;
   font-family: var(--ps-font-ui); font-weight: 700; font-size: var(--ps-fs-sm);
 }
 .ps-bgupload:hover { background: #2a63d4; }
+.ps-bgupload .nxi { font-size: 16px; }
+
 .ps-patgrid {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
-  max-height: 180px; overflow-y: auto; padding-right: 4px;
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px;
+  max-height: 170px; overflow-y: auto; padding-right: 4px;
 }
 .ps-patcell {
-  position: relative; aspect-ratio: 1 / 1; border: 2px solid var(--ps-border);
+  position: relative; aspect-ratio: 1 / 1; border: 1px solid var(--ps-border);
   border-radius: var(--ps-r-sm); overflow: hidden; cursor: pointer;
   background: var(--ps-surface); padding: 0;
 }
-.ps-patcell.is-active { border-color: var(--ps-gold); }
+.ps-patcell.is-active { border-color: var(--ps-gold); border-width: 2px; }
 .ps-patcell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.ps-patfit { display: flex; flex-direction: column; gap: var(--ps-sp-3); }
+
+.ps-patfit { display: flex; flex-direction: column; gap: var(--ps-sp-2); }
 .ps-segmented {
   display: grid; grid-template-columns: repeat(3, 1fr);
   border: 1px solid var(--ps-border); border-radius: var(--ps-r-sm); overflow: hidden;
 }
 .ps-seg {
-  border: none; background: var(--ps-surface); cursor: pointer; padding: 9px 6px;
+  border: none; background: var(--ps-surface); cursor: pointer; padding: 8px 6px;
   font-family: var(--ps-font-ui); font-weight: 600; font-size: var(--ps-fs-sm);
   color: var(--ps-ink-2); border-right: 1px solid var(--ps-border);
 }
@@ -1422,3 +1437,27 @@
   font-size: var(--ps-fs-sm); color: var(--ps-ink);
 }
 .ps-radio input { accent-color: #2f6fed; width: 15px; height: 15px; cursor: pointer; }
+
+/* ======================= QR panel ======================= */
+.ps-qr__field { display: flex; flex-direction: column; gap: 6px; }
+.ps-qr__field > span { font-size: var(--ps-fs-sm); font-weight: 600; color: var(--ps-ink); }
+.ps-qr__field input[type='text'] {
+  width: 100%; background: var(--ps-surface);
+  border: 1px solid var(--ps-border); border-radius: var(--ps-r-sm);
+  padding: 9px 12px; font-family: var(--ps-font-ui); font-size: var(--ps-fs-sm); color: var(--ps-ink);
+}
+.ps-qr__field--row { flex-direction: row; align-items: center; justify-content: space-between; }
+.ps-qr__field--row input[type='color'] {
+  width: 40px; height: 28px; border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); background: none; cursor: pointer; padding: 0;
+}
+.ps-qr__preview {
+  position: relative; height: 190px; border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r); overflow: hidden; display: grid; place-items: center;
+}
+.ps-qr__preview img {
+  position: absolute; inset: 0; width: 100%; height: 100%; padding: 14px;
+  object-fit: contain; display: block;
+}
+.ps-qr__hint { font-size: var(--ps-fs-xs); color: var(--ps-muted); text-align: center; padding: 0 16px; }
+.ps-qr__add { justify-content: center; }

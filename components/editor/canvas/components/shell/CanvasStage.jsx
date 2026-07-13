@@ -858,22 +858,29 @@ export default function CanvasStage() {
       return
     }
     let alive = true
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      if (!alive) return
-      patternImgRef.current = img
-      setPatternImg(img)
-      fabricRef.current?.requestRenderAll()
+    // Hotlinked backgrounds can be several MB; if the full-size image fails
+    // (CORS / 404) fall back to the thumbnail so the surface still renders.
+    const load = (url, onFail) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        if (!alive) return
+        patternImgRef.current = img
+        setPatternImg(img)
+        fabricRef.current?.requestRenderAll()
+      }
+      img.onerror = () => {
+        if (!alive) return
+        if (onFail) return onFail()
+        patternImgRef.current = null
+        setPatternImg(null)
+      }
+      img.src = url
     }
-    img.onerror = () => {
-      if (!alive) return
-      patternImgRef.current = null
-      setPatternImg(null)
-    }
-    img.src = src
+    const thumb = doc.background?.thumb
+    load(src, thumb && thumb !== src ? () => load(thumb) : null)
     return () => { alive = false }
-  }, [doc.background?.type, doc.background?.src])
+  }, [doc.background?.type, doc.background?.src, doc.background?.thumb])
 
   // ---- dimension + boundary overlay path (DOM SVG, non-interactive) ----
   const overlayPath = box.w && box.h ? buildShapePath(doc.shape, box.w, box.h) : ''

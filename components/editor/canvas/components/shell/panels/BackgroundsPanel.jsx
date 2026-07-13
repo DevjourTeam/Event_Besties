@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
 import { useEditorState, useEditorApi } from '../../../editor/EditorProvider'
-import { PATTERNS } from '../../../data/patterns'
+import { BACKGROUNDS } from '../../../data/backgrounds'
+import ColorPicker from './ColorPicker'
 
 /**
- * Background of the printable surface — colours or patterns.
+ * Background of the printable surface — colours or patterns, matching the
+ * reference designer's layout.
  *
  * Drives doc.background, NOT canvas.backgroundColor: the Fabric canvas is
  * larger than the print area and transparent, so a colour set on it would paint
@@ -14,8 +16,8 @@ import { PATTERNS } from '../../../data/patterns'
  *   { type: 'pattern', src, fit: repeat|exact|scale, mode: brick|tile, spacing, size }
  *   { type: 'none' }
  *
- * A pattern defaults to fit=repeat at size 5, which is the image's ORIGINAL
- * pixel size — so it tiles rather than being stretched, and never blurs.
+ * A pattern defaults to fit=repeat at size 5 — the image's ORIGINAL pixel size —
+ * so it tiles rather than being stretched, and never blurs.
  */
 const COLORS = [
   '#e6e6e6', '#f5a623', '#2e7d32', '#cbc09a', '#c9a227', '#b39b73',
@@ -36,11 +38,10 @@ export default function BackgroundsPanel({ onBack }) {
 
   const setColor = (value) => api.patchDoc({ background: { type: 'color', value } })
   const clear = () => api.patchDoc({ background: { type: 'none', value: null } })
-
-  const setPattern = (src) =>
-    api.patchDoc({ background: { type: 'pattern', src, ...PATTERN_DEFAULTS } })
-
-  // update one property of the active pattern
+  // `thumb` is kept as a fallback: the full-size image can be several MB and is
+  // hotlinked, so if it fails (CORS / 404) the surface still renders.
+  const setPattern = (src, thumb) =>
+    api.patchDoc({ background: { type: 'pattern', src, thumb: thumb || null, ...PATTERN_DEFAULTS } })
   const patchPattern = (patch) => {
     if (bg.type !== 'pattern') return
     api.patchDoc({ background: { ...bg, ...patch } })
@@ -53,12 +54,9 @@ export default function BackgroundsPanel({ onBack }) {
     reader.readAsDataURL(file)
   }
 
-  const patterns = PATTERNS.filter((p) =>
-    query ? p.id.toLowerCase().includes(query.toLowerCase()) : true
-  )
-  const colors = COLORS.filter((c) =>
-    query ? c.toLowerCase().includes(query.toLowerCase()) : true
-  )
+  const q = query.trim().toLowerCase()
+  const patterns = q ? BACKGROUNDS.filter((p) => p.id.toLowerCase().includes(q)) : BACKGROUNDS
+  const colors = q ? COLORS.filter((c) => c.toLowerCase().includes(q)) : COLORS
 
   return (
     <div className="ps-panel ps-bgpanel">
@@ -70,13 +68,26 @@ export default function BackgroundsPanel({ onBack }) {
         Back
       </button>
 
-      <input
-        className="ps-bgsearch"
-        type="search"
-        placeholder="Search…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="ps-bgsearchrow">
+        <div className="ps-bgsearch">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <button type="button" className="ps-bgfilter" title="Filter" aria-label="Filter">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 5h18l-7 8v6l-4 2v-8L3 5z" />
+          </svg>
+        </button>
+      </div>
 
       <div className="ps-bgtabs">
         <button
@@ -113,22 +124,14 @@ export default function BackgroundsPanel({ onBack }) {
 
           <div className="ps-or ps-or--spaced"><span>OR, CHOOSE FROM COLOR PICKER</span></div>
 
-          <label className="ps-bgcustom">
-            <span>Custom colour</span>
-            <input
-              type="color"
-              value={bg.type === 'color' ? bg.value : '#ffffff'}
-              onChange={(e) => setColor(e.target.value)}
-            />
-          </label>
+          <ColorPicker
+            value={bg.type === 'color' ? bg.value : '#000000'}
+            onChange={setColor}
+          />
         </>
       ) : (
         <>
-          <button
-            type="button"
-            className="ps-bgupload"
-            onClick={() => fileRef.current?.click()}
-          >
+          <button type="button" className="ps-bgupload" onClick={() => fileRef.current?.click()}>
             <i className="nxi nxi-upload" aria-hidden="true" />
             Upload a pattern
           </button>
@@ -137,10 +140,7 @@ export default function BackgroundsPanel({ onBack }) {
             type="file"
             accept="image/png,image/jpeg,image/jpg"
             hidden
-            onChange={(e) => {
-              onUpload(e.target.files?.[0])
-              e.target.value = ''
-            }}
+            onChange={(e) => { onUpload(e.target.files?.[0]); e.target.value = '' }}
           />
           <p className="ps-upload__types-label">Accepted File Types</p>
           <div className="ps-chips">
@@ -157,15 +157,14 @@ export default function BackgroundsPanel({ onBack }) {
                 key={p.id}
                 type="button"
                 className={`ps-patcell${bg.type === 'pattern' && bg.src === p.full ? ' is-active' : ''}`}
-                onClick={() => setPattern(p.full)}
+                onClick={() => setPattern(p.full, p.thumb)}
                 title={p.id}
               >
-                <img src={p.thumb} alt={p.id} draggable={false} />
+                <img src={p.thumb} alt="" draggable={false} crossOrigin="anonymous" />
               </button>
             ))}
           </div>
 
-          {/* fit controls appear once a pattern is chosen */}
           {bg.type === 'pattern' && (
             <div className="ps-patfit">
               <h3 className="ps-imgedit__h">Choose a fit</h3>
@@ -187,7 +186,6 @@ export default function BackgroundsPanel({ onBack }) {
                 ))}
               </div>
 
-              {/* brick/tile + spacing + size only matter when repeating */}
               {(bg.fit || 'repeat') === 'repeat' && (
                 <>
                   <div className="ps-radios">
