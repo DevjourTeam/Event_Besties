@@ -115,6 +115,8 @@ export default function CanvasStage() {
   // decoded background-pattern image, shared by the on-screen surface and export
   const patternImgRef = useRef(null)
   const [patternImg, setPatternImg] = useState(null)
+  // hotlinked backgrounds can be several MB — show a loader on the canvas
+  const [bgLoading, setBgLoading] = useState(false)
 
   // ---- fit the printable area into the container, preserving doc aspect ----
   // The workspace margin is reserved on top, so the whole Fabric canvas fits.
@@ -855,9 +857,11 @@ export default function CanvasStage() {
     if (!src) {
       patternImgRef.current = null
       setPatternImg(null)
+      setBgLoading(false)
       return
     }
     let alive = true
+    setBgLoading(true)
     // Hotlinked backgrounds can be several MB; if the full-size image fails
     // (CORS / 404) fall back to the thumbnail so the surface still renders.
     const load = (url, onFail) => {
@@ -867,6 +871,7 @@ export default function CanvasStage() {
         if (!alive) return
         patternImgRef.current = img
         setPatternImg(img)
+        setBgLoading(false)
         fabricRef.current?.requestRenderAll()
       }
       img.onerror = () => {
@@ -874,12 +879,13 @@ export default function CanvasStage() {
         if (onFail) return onFail()
         patternImgRef.current = null
         setPatternImg(null)
+        setBgLoading(false)
       }
       img.src = url
     }
     const thumb = doc.background?.thumb
     load(src, thumb && thumb !== src ? () => load(thumb) : null)
-    return () => { alive = false }
+    return () => { alive = false; setBgLoading(false) }
   }, [doc.background?.type, doc.background?.src, doc.background?.thumb])
 
   // ---- dimension + boundary overlay path (DOM SVG, non-interactive) ----
@@ -913,6 +919,17 @@ export default function CanvasStage() {
   return (
     <div className="ps-canvas-wrap" ref={wrapRef}>
       <CanvasOverlayTools />
+
+      {/* background images are hotlinked and can be several MB */}
+      {bgLoading && (
+        <div className="ps-bgloader" role="status" aria-live="polite">
+          <div className="ps-bgloader__card">
+            <span className="ps-bgloader__ring" aria-hidden="true" />
+            <span className="ps-bgloader__txt">Applying background…</span>
+          </div>
+        </div>
+      )}
+
       <div className="ps-canvas-host" style={{ width: canvasW, height: canvasH }}>
         {/* product mockup photo behind everything (when a product provides one) */}
         {doc.mockup && (

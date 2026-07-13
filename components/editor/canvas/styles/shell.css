@@ -1461,3 +1461,45 @@
 }
 .ps-qr__hint { font-size: var(--ps-fs-xs); color: var(--ps-muted); text-align: center; padding: 0 16px; }
 .ps-qr__add { justify-content: center; }
+
+/* ---- background-loading overlay (hotlinked images can be several MB) ---- */
+.ps-bgloader {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  border-radius: var(--ps-r);
+}
+.ps-bgloader__card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--ps-surface);
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-pill);
+  padding: 11px 20px 11px 14px;
+  box-shadow: var(--ps-shadow-lg);
+}
+/* gold ring on the brand navy track */
+.ps-bgloader__ring {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--ps-border);
+  border-top-color: var(--ps-gold);
+  border-right-color: var(--ps-gold);
+  animation: ps-bgspin 0.7s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes ps-bgspin { to { transform: rotate(360deg); } }
+.ps-bgloader__txt {
+  font-family: var(--ps-font-ui);
+  font-size: var(--ps-fs-sm);
+  font-weight: 600;
+  color: var(--ps-ink);
+  white-space: nowrap;
+}
