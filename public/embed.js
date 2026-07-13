@@ -55,6 +55,25 @@
         });
     }
 
+    // The variant the customer currently has selected, per the product form.
+    function currentVariantId() {
+      var idEl = document.querySelector('[name="id"]');
+      return idEl && idEl.value ? String(idEl.value) : "";
+    }
+
+    // The size that variant corresponds to — null when the product has no sizes,
+    // or when nothing valid is selected yet.
+    function selectedSize(config) {
+      var sizes = config.variants || [];
+      if (!sizes.length) return null;
+      var id = currentVariantId();
+      if (!id) return null;
+      for (var i = 0; i < sizes.length; i++) {
+        if (String(sizes[i].variantId) === id) return sizes[i];
+      }
+      return null;
+    }
+
     function mountButton(config) {
       var addToCartBtn =
         document.querySelector('[name="add"]') ||
@@ -65,23 +84,67 @@
         addToCartBtn.style.display = "none";
       }
 
+      var hasSizes = (config.variants || []).length > 0;
+
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = "Customize & Order";
       btn.style.cssText =
         "display:block;width:100%;padding:14px 24px;" +
-        "background:#c8a96e;color:#fff;border:none;border-radius:8px;" +
-        "font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.02em;" +
-        "transition:background 0.15s;margin-top:8px;";
+        "border:none;border-radius:8px;font-size:15px;font-weight:700;" +
+        "letter-spacing:0.02em;transition:background 0.15s;margin-top:8px;";
+
+      var enabled = false;
+
+      // On a sized product the button stays dead until a size is picked, so the
+      // customer can never design at a size they did not choose. The chosen size
+      // is spelled out on the button — some themes preselect a variant, and the
+      // customer must still see which one they are about to design at.
+      function sync() {
+        var size = hasSizes ? selectedSize(config) : null;
+        enabled = !hasSizes || !!size;
+
+        if (!enabled) {
+          btn.textContent = "Choose a size first";
+          btn.style.background = "#9a9a9a";
+          btn.style.color = "#fff";
+          btn.style.cursor = "not-allowed";
+          btn.setAttribute("aria-disabled", "true");
+          return;
+        }
+        btn.textContent = size
+          ? "Customize & Order — " + size.label
+          : "Customize & Order";
+        btn.style.background = "#c8a96e";
+        btn.style.color = "#fff";
+        btn.style.cursor = "pointer";
+        btn.removeAttribute("aria-disabled");
+      }
+
       btn.addEventListener("mouseenter", function () {
-        btn.style.background = "#b8996e";
+        if (enabled) btn.style.background = "#b8996e";
       });
       btn.addEventListener("mouseleave", function () {
-        btn.style.background = "#c8a96e";
+        if (enabled) btn.style.background = "#c8a96e";
       });
       btn.addEventListener("click", function () {
+        if (!enabled) return;
         openEditor(config);
       });
+
+      sync();
+
+      // Themes update the variant in different ways — a <select>, swatch radios,
+      // or JS that rewrites the hidden id input with no event we can hook. Listen
+      // for changes AND poll the input, which catches every theme.
+      document.addEventListener("change", sync, true);
+      var lastId = currentVariantId();
+      setInterval(function () {
+        var id = currentVariantId();
+        if (id !== lastId) {
+          lastId = id;
+          sync();
+        }
+      }, 300);
 
       if (addToCartBtn && addToCartBtn.parentNode) {
         addToCartBtn.parentNode.insertBefore(btn, addToCartBtn.nextSibling);
@@ -92,9 +155,7 @@
     }
 
     function openEditor(config) {
-      var variantId = "";
-      var idEl = document.querySelector('[name="id"]');
-      if (idEl && idEl.value) variantId = idEl.value;
+      var variantId = currentVariantId();
 
       // Set by the editor via postMessage: true while the canvas has objects
       // that would be lost on close/reload.

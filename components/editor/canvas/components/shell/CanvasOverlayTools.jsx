@@ -7,6 +7,21 @@ const ZOOM_ITEMS = [
   { label: 'Fit to designs', mode: 'designs' },
 ]
 
+/** The nxi icon font has no trash glyph, so this one is drawn inline. */
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  )
+}
+
 const EDIT_ITEMS = [
   { label: 'Clone', icon: 'copy', fn: 'clone' },
   { label: 'Forward Swap', icon: 'swap-forward', fn: 'bringForward' },
@@ -107,15 +122,25 @@ export default function CanvasOverlayTools() {
         )}
       </div>
 
-      {/* bottom-left: clear all */}
+      {/* bottom-left: clear all + remove background */}
       {(hasObjects || hasBackground) && (
         <div className="ps-ovl ps-ovl--bl">
-          {hasObjects && (
-            <button type="button" className="ps-ovl__clear" onClick={() => call('clearAll')}>
-              <i className="nxi nxi-clear" aria-hidden="true" />
-              Clear all
-            </button>
-          )}
+          {/* "Clear all" means all: the objects AND the background. */}
+          <button
+            type="button"
+            className="ps-ovl__clear"
+            onClick={() => {
+              api.canvas.current?.clearAll?.()
+              api.patchDoc({ background: { type: 'none', value: null } })
+              setMenu(null)
+            }}
+            title="Remove everything from the canvas"
+          >
+            <i className="nxi nxi-clear" aria-hidden="true" />
+            Clear all
+          </button>
+
+          {/* Removes ONLY the background, leaving the design in place. */}
           {hasBackground && (
             <button
               type="button"
@@ -124,9 +149,9 @@ export default function CanvasOverlayTools() {
                 api.patchDoc({ background: { type: 'none', value: null } })
                 setMenu(null)
               }}
-              title="Remove the background"
+              title="Remove the background only"
             >
-              <i className="nxi nxi-trash" aria-hidden="true" />
+              <TrashIcon />
               Background
             </button>
           )}

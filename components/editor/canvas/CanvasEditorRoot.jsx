@@ -6,6 +6,7 @@ import EditorShell from './components/shell/EditorShell'
 import UnsavedGuard from './UnsavedGuard'
 import { preloadAllFonts } from './utils/fontLoader'
 import { handoffDesign } from '@/lib/cart-client'
+import { uploadPrintFile } from './editor/uploadPrint'
 import './styles/tokens.css'
 import './styles/nxicons.css'
 import './styles/shell.css'
@@ -34,13 +35,9 @@ export default function CanvasEditorRoot({ doc, productTitle, price, templateId,
     async (pngBase64, { addToCart }) => {
       setStatus({ kind: 'processing', msg: 'Preparing your print file…' })
       try {
-        const res = await fetch('/api/editor/export', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'canvas', templateId, pngBase64 }),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Export failed')
+        // Straight to Cloudinary — a print PNG is far bigger than the 4.5 MB
+        // body Vercel will accept, so it must not go through our own API.
+        const data = await uploadPrintFile(pngBase64, templateId)
 
         if (!addToCart) {
           setStatus({ kind: 'success', msg: 'Design saved. Your print file is ready.' })

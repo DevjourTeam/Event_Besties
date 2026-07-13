@@ -30,8 +30,15 @@ export function CustomCanvasEditor({
   config: WithProductImage<CanvasConfig>;
 }) {
   // variantId arrives on the URL when opened from a Shopify product page; it is
-  // what the cart hand-off attaches the finished design to.
+  // what the cart hand-off attaches the finished design to, AND — on a
+  // multi-size product — which size the customer is designing at.
   const variantId = useSearchParams().get("variantId") ?? "";
+
+  // Resolve the chosen size. Fall back to the top-level dimensions, which is
+  // what single-size products (and anything created before sizes existed) have.
+  const size = config.variants?.find((v) => v.variantId === variantId);
+  const printWidthCm = size?.printWidthCm ?? config.printWidthCm;
+  const printHeightCm = size?.printHeightCm ?? config.printHeightCm;
 
   // Map the stored shape into the editor's doc.shape. A custom cut carries an
   // svgPath; named presets (arch/circle/…) are generated geometrically.
@@ -44,7 +51,7 @@ export function CustomCanvasEditor({
     id: config.templateId,
     name: config.productName,
     shape,
-    sizeCm: { w: config.printWidthCm, h: config.printHeightCm },
+    sizeCm: { w: printWidthCm, h: printHeightCm },
     dpi: 150,
     background: { type: "none", value: null },
     mockup: null,
@@ -52,11 +59,15 @@ export function CustomCanvasEditor({
     productImage: config.productImage ?? null,
   };
 
+  // Show the price and size the customer actually picked, not the base one.
+  const price = size ? `£${size.priceGbp.toFixed(2)}` : config.price;
+  const title = size ? `${config.productName} — ${size.label}` : config.productName;
+
   return (
     <CanvasEditorRoot
       doc={doc}
-      productTitle={config.productName}
-      price={config.price}
+      productTitle={title}
+      price={price}
       templateId={config.templateId}
       variantId={variantId}
     />

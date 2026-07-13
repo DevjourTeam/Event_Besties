@@ -4,6 +4,7 @@ import { useEditorState, useEditorApi } from '../../editor/EditorProvider'
 import { buildShapePath } from '../../editor/shapes'
 import { applyObjectControls, applyControlsToAll } from '../../editor/controls'
 import CanvasOverlayTools from './CanvasOverlayTools'
+import CanvasBackdrop from './CanvasBackdrop'
 
 /**
  * CanvasStage — the engine's viewport.
@@ -291,7 +292,15 @@ export default function CanvasStage() {
      * surface (the shape, filled) behind the art — giving a shaped PNG:
      * background inside the cut line, transparent outside it.
      */
-    const renderPrint = ({ multiplier, maxEdge } = {}) => {
+    /**
+     * Render the print area to a PNG.
+     *
+     * `preview: true` paints a blank board WHITE instead of leaving it
+     * transparent. The print file must stay transparent — the cutter needs it —
+     * but a customer looking at a preview should see their design on the board,
+     * not floating on nothing.
+     */
+    const renderPrint = ({ multiplier, maxEdge, preview = false } = {}) => {
       const { w: pw, h: ph } = printRef.current
       if (!pw || !ph) return null
       const d = docRef.current
@@ -316,7 +325,7 @@ export default function CanvasStage() {
         // export matches what the customer saw.
         const img = printImgRef.current || patternImgRef.current
         if (img) fill = buildFabricPattern(b, img, pw, ph, patternImgRef.current)
-      } else if (b?.type === 'none') fill = 'transparent'
+      } else if (b?.type === 'none') fill = preview ? '#ffffff' : 'transparent'
 
       const bg = new Path(buildShapePath(d.shape, pw, ph), {
         left: WORK_PAD,
@@ -362,7 +371,10 @@ export default function CanvasStage() {
         if (!hasArt) return api.setThumb(null)
         const { w: pw, h: ph } = printRef.current
         const longest = Math.max(pw || 1, ph || 1)
-        api.setThumb(renderPrint({ multiplier: Math.min(1, 160 / longest) }))
+        // preview: the thumbnail shows the board, not the transparent print file
+        api.setThumb(
+          renderPrint({ multiplier: Math.min(1, 160 / longest), preview: true })
+        )
       }, 250)
     }
 
@@ -495,7 +507,8 @@ export default function CanvasStage() {
       // Renders the printable area at print DPI, cropping away the workspace.
       // opts.maxEdge caps the longest edge (used when POSTing to the export API
       // so the base64 body stays under serverless limits).
-      exportPNG: async (opts = {}) => renderPrint({ maxEdge: opts.maxEdge }),
+      exportPNG: async (opts = {}) =>
+        renderPrint({ maxEdge: opts.maxEdge, preview: opts.preview }),
       exportPDF: async () => {
         console.warn('exportPDF: not wired yet (Phase: export). Returns PNG for now.')
         return api.canvas.current.exportPNG()
@@ -938,14 +951,16 @@ export default function CanvasStage() {
     bgDef?.type === 'pattern' && patternImg && box.w
       ? patternTile(bgDef, patternImg, box.w, box.h)
       : null
+  // On screen the blank board is WHITE, not transparent: it sits on the room
+  // backdrop and has to read as a physical board rather than a hole. The export
+  // is unaffected — renderPrint() only paints a background for colour/pattern,
+  // so "no background" still exports with a transparent print surface.
   const surfaceFill =
     bgDef?.type === 'color'
       ? bgDef.value
       : bgDef?.type === 'pattern' && patTile
         ? 'url(#ps-bgpattern)'
-        : bgDef?.type === 'none'
-          ? 'transparent'
-          : '#ffffff'
+        : '#ffffff'
 
   return (
     <div className="ps-canvas-wrap" ref={wrapRef}>
@@ -962,6 +977,18 @@ export default function CanvasStage() {
       )}
 
       <div className="ps-canvas-host" style={{ width: canvasW, height: canvasH }}>
+        {/* Room scene behind the board, so the customer can judge its real size.
+            Purely visual — it is not a Fabric object, so it never reaches the
+            print file. Wider than the workspace (the wrap clips the overflow),
+            and its floor line is the bottom of the print shape, so the board
+            stands on the ground whatever shape it is. */}
+        <CanvasBackdrop
+          printW={box.w}
+          printH={box.h}
+          printLeft={WORK_PAD}
+          printTop={WORK_PAD}
+        />
+
         {/* product mockup photo behind everything (when a product provides one) */}
         {doc.mockup && (
           <img className="ps-mockup" src={doc.mockup} alt="" draggable={false} />

@@ -32,6 +32,36 @@ function uploadStream(
   });
 }
 
+/**
+ * Credentials for a browser-side upload straight to Cloudinary.
+ *
+ * The print PNG is far too big to POST through our own API: Vercel caps a
+ * serverless request body at 4.5 MB and a 2400px print file base64-encodes well
+ * past that, which the platform rejects with a plain-text 413. Signing here and
+ * uploading from the browser keeps the API secret on the server while taking our
+ * function out of the data path entirely.
+ *
+ * The signature must cover exactly the params the browser sends (minus file,
+ * api_key and cloud_name), or Cloudinary rejects it as invalid.
+ */
+export function signUpload(params: Record<string, string | number>) {
+  ensureConfigured();
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  if (!apiSecret) throw new Error("Cloudinary is not configured");
+
+  const timestamp = Math.round(Date.now() / 1000);
+  const signature = cloudinary.utils.api_sign_request(
+    { ...params, timestamp },
+    apiSecret
+  );
+  return {
+    signature,
+    timestamp,
+    apiKey: process.env.CLOUDINARY_API_KEY as string,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME as string,
+  };
+}
+
 export function uploadSVG(buffer: Buffer, publicId: string): Promise<UploadResult> {
   return uploadStream(buffer, {
     resource_type: "raw",

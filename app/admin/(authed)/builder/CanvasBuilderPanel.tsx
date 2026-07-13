@@ -9,7 +9,7 @@ import {
   CreateProductModal,
   type CreateProductSuccess,
 } from "@/components/admin/CreateProductModal";
-import type { CanvasConfig, CanvasShape } from "@/lib/types";
+import type { CanvasConfig, CanvasShape, CanvasSizeVariant } from "@/lib/types";
 import { buildShapePath } from "@/components/editor/canvas/editor/shapes";
 
 const SHAPE_OPTIONS: { value: CanvasShape; label: string }[] = [
@@ -21,12 +21,23 @@ const SHAPE_OPTIONS: { value: CanvasShape; label: string }[] = [
   { value: "custom", label: "Custom SVG path" },
 ];
 
+/** A size the admin is still editing — no Shopify variant id yet. */
+type DraftSize = Omit<CanvasSizeVariant, "variantId">;
+
+// The arched sailboard sizes, prefilled because they are the common case.
+const DEFAULT_SIZES: DraftSize[] = [
+  { label: "5ft (150 x 74cm)", printWidthCm: 74, printHeightCm: 150, priceGbp: 69.99 },
+  { label: "6ft (180 x 90cm)", printWidthCm: 90, printHeightCm: 180, priceGbp: 89.99 },
+  { label: "7ft (210 x 105cm)", printWidthCm: 105, printHeightCm: 210, priceGbp: 109.99 },
+];
+
+const money = (n: number) => `£${n.toFixed(2)}`;
+
 export function CanvasBuilderPanel() {
   const toast = useToast();
   const router = useRouter();
 
-  const [printWidthCm, setPrintWidthCm] = useState(100);
-  const [printHeightCm, setPrintHeightCm] = useState(150);
+  const [sizes, setSizes] = useState<DraftSize[]>(DEFAULT_SIZES);
   const [bleedPx, setBleedPx] = useState(10);
   const [safePx, setSafePx] = useState(22);
 
@@ -39,7 +50,15 @@ export function CanvasBuilderPanel() {
   const [modalOpen, setModalOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
-  const buildConfig = (productName: string, priceLabel: string): CanvasConfig => ({
+  // Shown on the product page: a single price, or the range across sizes.
+  const priceLabel = useMemo(() => {
+    if (!sizes.length) return "£0.00";
+    const lo = Math.min(...sizes.map((s) => s.priceGbp));
+    const hi = Math.max(...sizes.map((s) => s.priceGbp));
+    return lo === hi ? money(lo) : `${money(lo)} – ${money(hi)}`;
+  }, [sizes]);
+
+  const buildConfig = (productName: string): CanvasConfig => ({
     type: "canvas",
     templateId: `cnv_${Date.now().toString(36)}`,
     productName,
@@ -47,20 +66,42 @@ export function CanvasBuilderPanel() {
     ...(shape === "custom" && shapePath.trim() ? { shapePath: shapePath.trim() } : {}),
     displayW,
     displayH,
-    printWidthCm,
-    printHeightCm,
+    // Mirror the first size. Single-size products, and anything created before
+    // sizes existed, are read from these — they are the editor's fallback.
+    printWidthCm: sizes[0]?.printWidthCm ?? 100,
+    printHeightCm: sizes[0]?.printHeightCm ?? 150,
     bleedPx,
     safePx,
     price: priceLabel,
     status: "published",
     createdAt: new Date().toISOString().slice(0, 10),
+    // variantId is filled in by the create-product route once Shopify has made
+    // the variants — the admin cannot know the ids in advance.
+    variants: sizes.map((s) => ({ ...s, variantId: "" })),
   });
 
   const config: CanvasConfig = useMemo(
-    () => buildConfig("Untitled Canvas", "£0"),
+    () => buildConfig("Untitled Canvas"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [displayW, displayH, printWidthCm, printHeightCm, bleedPx, safePx, shape, shapePath]
+    [displayW, displayH, sizes, bleedPx, safePx, shape, shapePath, priceLabel]
   );
+
+  const patchSize = (i: number, patch: Partial<DraftSize>) =>
+    setSizes((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  const addSize = () =>
+    setSizes((prev) => [
+      ...prev,
+      { label: `Size ${prev.length + 1}`, printWidthCm: 100, printHeightCm: 150, priceGbp: 0 },
+    ]);
+  const removeSize = (i: number) =>
+    setSizes((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev));
+
+  const sizesValid =
+    sizes.length > 0 &&
+    sizes.every(
+      (s) => s.label.trim() && s.printWidthCm > 0 && s.printHeightCm > 0
+    ) &&
+    new Set(sizes.map((s) => s.label.trim())).size === sizes.length;
 
   const json = JSON.stringify(config, null, 2);
 
@@ -86,7 +127,7 @@ export function CanvasBuilderPanel() {
   }): Promise<CreateProductSuccess | { error: string }> => {
     setPublishing(true);
     try {
-      const finalConfig = buildConfig(fields.title, `£${fields.priceGbp.toFixed(2)}`);
+      const finalConfig = buildConfig(fields.title);
       const createRes = await fetch("/api/admin/create-product", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,7 +135,9 @@ export function CanvasBuilderPanel() {
           kind: "canvas",
           title: fields.title,
           description: fields.description,
-          priceGbp: fields.priceGbp,
+          // Each size carries its own price; this is only the fallback used if
+          // the product somehow ends up with no sizes.
+          priceGbp: sizes[0]?.priceGbp ?? 0,
           imageDataUrl: fields.imageDataUrl,
           config: finalConfig,
         }),
@@ -131,10 +174,73 @@ export function CanvasBuilderPanel() {
     <div className="flex min-h-[calc(100vh-180px)]">
       {/* LEFT — 360px form column */}
       <div className="w-[360px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-6">
-        <Card title="Print dimensions">
+        <Card title="Sizes">
+          <div className="space-y-3">
+            {sizes.map((s, i) => (
+              <div key={i} className="rounded-lg border border-card-border p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={s.label}
+                    onChange={(e) => patchSize(i, { label: e.target.value })}
+                    placeholder="6ft (180 x 90cm)"
+                    className="flex-1 h-9 px-3 rounded-lg border border-card-border bg-form-surface text-[12px] focus:outline-none focus:ring-2 focus:ring-gold/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSize(i)}
+                    disabled={sizes.length <= 1}
+                    title={sizes.length <= 1 ? "A product needs at least one size" : "Remove size"}
+                    className="h-9 w-9 shrink-0 rounded-lg border border-card-border text-[13px] text-text-muted hover:bg-form-surface disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <NumberField
+                    label="W (cm)"
+                    value={s.printWidthCm}
+                    onChange={(v) => patchSize(i, { printWidthCm: v })}
+                    min={1}
+                  />
+                  <NumberField
+                    label="H (cm)"
+                    value={s.printHeightCm}
+                    onChange={(v) => patchSize(i, { printHeightCm: v })}
+                    min={1}
+                  />
+                  <NumberField
+                    label="Price (£)"
+                    value={s.priceGbp}
+                    onChange={(v) => patchSize(i, { priceGbp: v })}
+                    min={0}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addSize}
+            className="mt-3 w-full h-9 rounded-lg border border-dashed border-card-border text-[12px] text-text-muted hover:bg-form-surface"
+          >
+            + Add another size
+          </button>
+
+          {!sizesValid && (
+            <p className="text-[10px] text-red-600 mt-2 leading-relaxed">
+              Every size needs a unique name and a width and height above zero.
+            </p>
+          )}
+          <p className="text-[10px] text-text-muted mt-2 leading-relaxed">
+            Each size becomes a Shopify variant under a <strong>Size</strong> option, priced
+            separately. The customer must pick one before the editor will open, and it is what sets
+            their canvas dimensions. Sizes are fixed once the product is created.
+          </p>
+        </Card>
+
+        <Card title="Bleed & safe zone">
           <div className="grid grid-cols-2 gap-3">
-            <NumberField label="Width (cm)" value={printWidthCm} onChange={setPrintWidthCm} min={1} />
-            <NumberField label="Height (cm)" value={printHeightCm} onChange={setPrintHeightCm} min={1} />
             <NumberField label="Bleed (px)" value={bleedPx} onChange={setBleedPx} min={0} />
             <NumberField label="Safe zone (px)" value={safePx} onChange={setSafePx} min={0} />
           </div>
@@ -190,14 +296,14 @@ export function CanvasBuilderPanel() {
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          disabled={publishing}
-          className="w-full h-11 rounded-lg bg-gold hover:bg-gold-hover text-white text-[13px] font-semibold tracking-[0.02em] disabled:opacity-60 inline-flex items-center justify-center gap-2"
+          disabled={publishing || !sizesValid}
+          className="w-full h-11 rounded-lg bg-gold hover:bg-gold-hover text-white text-[13px] font-semibold tracking-[0.02em] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
           {publishing && <Spinner size={14} />}
           {publishing ? "Creating…" : "Create Shopify product"}
         </button>
         <p className="text-[10px] text-text-muted leading-relaxed text-center -mt-2">
-          Enter product details in the next step.
+          Creates {sizes.length} {sizes.length === 1 ? "variant" : "variants"} · {priceLabel}
         </p>
       </div>
 
@@ -251,6 +357,7 @@ export function CanvasBuilderPanel() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreate}
+        priceNote={`${sizes.length} ${sizes.length === 1 ? "size" : "sizes"} · ${priceLabel} — each size is priced on the Sizes panel.`}
       />
     </div>
   );

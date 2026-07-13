@@ -21,6 +21,11 @@ type Props = {
     priceGbp: number;
     imageDataUrl: string | null;
   }) => Promise<CreateProductSuccess | { error: string }>;
+  /**
+   * Set when the product prices each size separately — replaces the single
+   * price field with this summary, e.g. "3 sizes · £69.99 – £109.99".
+   */
+  priceNote?: string;
 };
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -32,7 +37,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function CreateProductModal({ open, onClose, onSubmit }: Props) {
+export function CreateProductModal({ open, onClose, onSubmit, priceNote }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("0");
@@ -172,16 +177,24 @@ export function CreateProductModal({ open, onClose, onSubmit }: Props) {
             />
           </Field>
 
-          <Field label="Price (GBP)">
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-card-border bg-form-surface text-[13px] focus:outline-none focus:ring-2 focus:ring-gold/40"
-            />
-          </Field>
+          {priceNote ? (
+            // A sized product prices each size separately, so a single price
+            // field here would be a lie.
+            <Field label="Pricing">
+              <p className="text-[12px] text-text-muted leading-relaxed">{priceNote}</p>
+            </Field>
+          ) : (
+            <Field label="Price (GBP)">
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg border border-card-border bg-form-surface text-[13px] focus:outline-none focus:ring-2 focus:ring-gold/40"
+              />
+            </Field>
+          )}
 
           <Field label="Product image (optional)">
             <div className="flex items-center gap-3">

@@ -324,6 +324,19 @@ export type CreateProductInput = {
   title: string;
   descriptionHtml?: string;
   priceGbp: number;
+  /**
+   * Size option values, in order, e.g. ["5ft (150 x 74cm)", "6ft (180 x 90cm)"].
+   * Given these, Shopify creates one variant per value and the storefront shows
+   * a Size dropdown. Omit for a single-size product (one default variant).
+   */
+  sizeLabels?: string[];
+};
+
+export type CreatedVariant = {
+  /** Numeric Shopify variant id. */
+  numericId: string;
+  /** The Size option value, so callers can match it back to their own size. */
+  label: string;
 };
 
 export type CreateProductResult = {
@@ -332,6 +345,8 @@ export type CreateProductResult = {
   defaultVariantId: string;
   numericVariantId: string;
   adminUrl: string;
+  /** One entry per variant Shopify created, in the order it returned them. */
+  variants: CreatedVariant[];
 };
 
 // Shopify dropped the `variants` field from ProductInput in 2024-07+. We
@@ -341,11 +356,24 @@ export type CreateProductResult = {
 export async function createProduct(
   input: CreateProductInput
 ): Promise<CreateProductResult> {
+  const labels = input.sizeLabels?.filter((s) => s.trim().length > 0) ?? [];
+
+  // Passing productOptions makes Shopify create one variant per option value, so
+  // the storefront renders a Size dropdown. With no options it creates a single
+  // "Default Title" variant, which is the old single-size behaviour.
+  const productOptions = labels.length
+    ? [{ name: "Size", values: labels.map((name) => ({ name })) }]
+    : undefined;
+
   const data = await adminFetch<{
     productCreate: {
       product: {
         id: string;
-        variants: { edges: Array<{ node: { id: string } }> };
+        variants: {
+          edges: Array<{
+            node: { id: string; title: string; selectedOptions: Array<{ value: string }> };
+          }>;
+        };
       } | null;
       userErrors: Array<{ field: string[]; message: string }>;
     };
@@ -354,7 +382,9 @@ export async function createProduct(
        productCreate(input: $input) {
          product {
            id
-           variants(first: 1) { edges { node { id } } }
+           variants(first: 50) {
+             edges { node { id title selectedOptions { value } } }
+           }
          }
          userErrors { field message }
        }
@@ -364,6 +394,7 @@ export async function createProduct(
         title: input.title,
         descriptionHtml: input.descriptionHtml ?? "",
         status: "ACTIVE",
+        ...(productOptions ? { productOptions } : {}),
       },
     }
   );
@@ -377,21 +408,154 @@ export async function createProduct(
   }
 
   const product = data.productCreate.product;
-  const variantEdge = product.variants.edges[0];
-  if (!variantEdge) {
-    throw new Error("productCreate returned product with no default variant");
+  const edges = product.variants.edges;
+  if (!edges.length) {
+    throw new Error("productCreate returned product with no variants");
+  }
+
+  const variants: CreatedVariant[] = edges.map((e) => ({
+    numericId: numericFromGid(e.node.id),
+    // For an option'd product the option value IS the size label; a default
+    // variant has none, so fall back to its title ("Default Title").
+    label: e.node.selectedOptions?.[0]?.value ?? e.node.title,
+  }));
+
+  // productCreate does NOT fan an option out into one variant per value — it
+  // creates the option and a SINGLE variant using the first value. Every other
+  // size has to be added explicitly, or the product ships with one size.
+  if (labels.length > 1) {
+    const missing = labels.filter((l) => !variants.some((v) => v.label === l));
+    if (missing.length) {
+      const extra = await createVariants(product.id, missing);
+      variants.push(...extra);
+    }
   }
 
   const numericProductId = numericFromGid(product.id);
-  const numericVariantId = numericFromGid(variantEdge.node.id);
 
   return {
     productId: product.id,
     numericId: numericProductId,
-    defaultVariantId: variantEdge.node.id,
-    numericVariantId,
+    defaultVariantId: edges[0].node.id,
+    numericVariantId: variants[0].numericId,
     adminUrl: `https://${STORE}/admin/products/${numericProductId}`,
+    variants,
   };
+}
+
+/** Add one variant per Size option value that does not have one yet. */
+async function createVariants(
+  productGid: string,
+  labels: string[]
+): Promise<CreatedVariant[]> {
+  const data = await adminFetch<{
+    productVariantsBulkCreate: {
+      productVariants: Array<{
+        id: string;
+        title: string;
+        selectedOptions: Array<{ value: string }>;
+      }> | null;
+      userErrors: Array<{ field: string[]; message: string }>;
+    };
+  }>(
+    `mutation AddVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+       productVariantsBulkCreate(productId: $productId, variants: $variants) {
+         productVariants { id title selectedOptions { value } }
+         userErrors { field message }
+       }
+     }`,
+    {
+      productId: productGid,
+      variants: labels.map((name) => ({
+        optionValues: [{ optionName: "Size", name }],
+        inventoryPolicy: "CONTINUE",
+      })),
+    }
+  );
+
+  const res = data.productVariantsBulkCreate;
+  if (res.userErrors.length) {
+    throw new Error(
+      `productVariantsBulkCreate failed: ${res.userErrors
+        .map((e) => `${e.field?.join(".")}: ${e.message}`)
+        .join("; ")}`
+    );
+  }
+
+  return (res.productVariants ?? []).map((v) => ({
+    numericId: numericFromGid(v.id),
+    label: v.selectedOptions?.[0]?.value ?? v.title,
+  }));
+}
+
+/**
+ * Delete a product outright. Used to clean up after a failed create — a
+ * half-made product would otherwise sit in the store AND block retries, since
+ * we refuse to create a second product with the same title.
+ */
+export async function deleteProduct(numericProductId: string): Promise<void> {
+  const data = await adminFetch<{
+    productDelete: {
+      deletedProductId: string | null;
+      userErrors: Array<{ field: string[]; message: string }>;
+    };
+  }>(
+    `mutation DeleteProduct($input: ProductDeleteInput!) {
+       productDelete(input: $input) {
+         deletedProductId
+         userErrors { field message }
+       }
+     }`,
+    { input: { id: `gid://shopify/Product/${numericProductId}` } }
+  );
+
+  const errs = data.productDelete.userErrors;
+  if (errs.length) {
+    throw new Error(
+      `productDelete failed: ${errs.map((e) => e.message).join("; ")}`
+    );
+  }
+}
+
+/**
+ * Price each variant separately — a 7ft board costs more than a 5ft one.
+ * Also turns inventory tracking off so a made-to-order product never shows as
+ * out of stock, matching what configureDefaultVariant does for single-size.
+ */
+export async function setVariantPrices(
+  numericProductId: string,
+  prices: Array<{ numericVariantId: string; priceGbp: number }>
+): Promise<void> {
+  if (!prices.length) return;
+
+  const data = await adminFetch<{
+    productVariantsBulkUpdate: {
+      userErrors: Array<{ field: string[]; message: string }>;
+    };
+  }>(
+    `mutation SetPrices($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+       productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+         userErrors { field message }
+       }
+     }`,
+    {
+      productId: `gid://shopify/Product/${numericProductId}`,
+      variants: prices.map((p) => ({
+        id: `gid://shopify/ProductVariant/${p.numericVariantId}`,
+        price: p.priceGbp.toFixed(2),
+        inventoryPolicy: "CONTINUE",
+      })),
+    }
+  );
+
+  const errs = data.productVariantsBulkUpdate.userErrors;
+  if (errs.length) {
+    throw new Error(
+      `setVariantPrices failed: ${errs
+        .map((e) => `${e.field?.join(".")}: ${e.message}`)
+        .join("; ")}`
+    );
+  }
 }
 
 export async function configureDefaultVariant(

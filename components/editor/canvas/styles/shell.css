@@ -1098,13 +1098,25 @@
 .ps-canvas-host {
   position: relative;
 }
+/* The room photo sits under everything. It is wider than the workspace and
+   spills out of .ps-canvas-host; .ps-canvas-wrap has overflow:hidden, so it is
+   clipped to the canvas area instead of escaping into the sidebar. */
+.ps-backdrop {
+  position: absolute;
+  display: block;
+  max-width: none; /* it is deliberately wider than its container */
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
 .ps-print-area {
   position: absolute;
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
 }
 /* guides sit above the artwork */
-.ps-print-area--top { z-index: 2; }
+.ps-print-area--top { z-index: 3; }
 .ps-mockup {
   position: absolute;
   inset: 0;
@@ -1112,7 +1124,7 @@
   height: 100%;
   object-fit: contain;
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
 }
 .ps-surface-layer {
   position: absolute;
@@ -1124,7 +1136,7 @@
 .ps-fabric-holder {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   line-height: 0;
 }
 
@@ -1359,3 +1371,113 @@
 }
 .ps-qr__add { justify-content: center; margin-top: 6px; }
 .ps-qr__add:disabled { opacity: 0.55; cursor: default; }
+
+/* ======================= backgrounds panel ======================= */
+.ps-bgpanel { gap: var(--ps-sp-2); }
+
+.ps-bgsearchrow { display: flex; gap: 8px; align-items: center; }
+.ps-bgsearch {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  background: var(--ps-surface); border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); padding: 0 10px; color: var(--ps-muted);
+}
+.ps-bgsearch input {
+  flex: 1; border: none; outline: none; background: transparent;
+  padding: 8px 0; font-family: var(--ps-font-ui);
+  font-size: var(--ps-fs-sm); color: var(--ps-ink);
+}
+.ps-bgfilter {
+  flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center;
+  background: var(--ps-surface); border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); color: var(--ps-ink-2); cursor: pointer;
+}
+.ps-bgfilter:hover { border-color: var(--ps-border-2); }
+
+.ps-bgtabs {
+  display: grid; grid-template-columns: 1fr 1fr;
+  background: var(--ps-surface-2); border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); padding: 3px;
+}
+.ps-bgtab {
+  border: none; background: transparent; cursor: pointer; padding: 6px 10px; border-radius: 6px;
+  font-family: var(--ps-font-ui); font-weight: 600; font-size: var(--ps-fs-sm); color: var(--ps-muted);
+}
+.ps-bgtab.is-active { background: var(--ps-surface); color: var(--ps-ink); box-shadow: var(--ps-shadow-sm); }
+
+.ps-bggrid {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px;
+  max-height: 122px; overflow-y: auto; padding-right: 4px;
+}
+.ps-bgcell {
+  aspect-ratio: 1 / 1; border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); cursor: pointer; padding: 0;
+  transition: border-color var(--ps-ease), transform var(--ps-ease);
+}
+.ps-bgcell:hover { transform: translateY(-1px); border-color: var(--ps-border-2); }
+.ps-bgcell.is-active { border-color: var(--ps-gold); box-shadow: var(--ps-shadow-sm); }
+
+.ps-bgupload {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; background: #2f6fed; color: #fff; border: none;
+  border-radius: var(--ps-r-sm); padding: 10px 14px; cursor: pointer;
+  font-family: var(--ps-font-ui); font-weight: 700; font-size: var(--ps-fs-sm);
+}
+.ps-bgupload:hover { background: #2a63d4; }
+.ps-bgupload .nxi { font-size: 16px; }
+
+.ps-patgrid {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px;
+  max-height: 170px; overflow-y: auto; padding-right: 4px;
+}
+.ps-patcell {
+  position: relative; aspect-ratio: 1 / 1; border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-sm); overflow: hidden; cursor: pointer;
+  background: var(--ps-surface); padding: 0;
+}
+.ps-patcell.is-active { border-color: var(--ps-gold); border-width: 2px; }
+.ps-patcell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.ps-patfit { display: flex; flex-direction: column; gap: var(--ps-sp-2); }
+.ps-segmented {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--ps-border); border-radius: var(--ps-r-sm); overflow: hidden;
+}
+.ps-seg {
+  border: none; background: var(--ps-surface); cursor: pointer; padding: 8px 6px;
+  font-family: var(--ps-font-ui); font-weight: 600; font-size: var(--ps-fs-sm);
+  color: var(--ps-ink-2); border-right: 1px solid var(--ps-border);
+}
+.ps-seg:last-child { border-right: none; }
+.ps-seg.is-active { background: var(--ps-gold); color: #fff; }
+.ps-radios { display: flex; gap: 20px; }
+.ps-radio {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: var(--ps-fs-sm); color: var(--ps-ink);
+}
+.ps-radio input { accent-color: #2f6fed; width: 15px; height: 15px; cursor: pointer; }
+
+/* ---- background-loading overlay (hotlinked images can be several MB) ---- */
+.ps-bgloader {
+  position: absolute; inset: 0; z-index: 7;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  border-radius: var(--ps-r);
+}
+.ps-bgloader__card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--ps-surface); border: 1px solid var(--ps-border);
+  border-radius: var(--ps-r-pill); padding: 11px 20px 11px 14px;
+  box-shadow: var(--ps-shadow-lg);
+}
+.ps-bgloader__ring {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 3px solid var(--ps-border);
+  border-top-color: var(--ps-gold); border-right-color: var(--ps-gold);
+  animation: ps-bgspin 0.7s linear infinite; flex: 0 0 auto;
+}
+@keyframes ps-bgspin { to { transform: rotate(360deg); } }
+.ps-bgloader__txt {
+  font-family: var(--ps-font-ui); font-size: var(--ps-fs-sm);
+  font-weight: 600; color: var(--ps-ink); white-space: nowrap;
+}

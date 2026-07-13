@@ -3,12 +3,14 @@ import { auth } from "@/lib/auth";
 import {
   configureDefaultVariant,
   createProduct,
+  deleteProduct,
   findProductByTitle,
   publishProductToAllChannels,
   setProductMetafield,
+  setVariantPrices,
   uploadProductImage,
 } from "@/lib/shopify-admin";
-import type { AnyConfig } from "@/lib/types";
+import type { AnyConfig, CanvasConfig } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -74,16 +76,57 @@ export async function POST(req: Request) {
 
     const priceGbp = typeof body.priceGbp === "number" ? body.priceGbp : 0;
 
+    // A canvas product may define several sizes. Each becomes a Shopify variant
+    // under a "Size" option, so the customer must choose one before ordering.
+    const sizes =
+      body.kind === "canvas" ? (body.config as CanvasConfig).variants ?? [] : [];
+    const isMultiSize = sizes.length > 0;
+
     const created = await createProduct({
       title,
       descriptionHtml: body.description?.trim() || "",
       priceGbp,
+      ...(isMultiSize ? { sizeLabels: sizes.map((s) => s.label) } : {}),
     });
 
+    // Everything past this point can fail with a product already in Shopify.
+    // If it does, delete that product: a half-made one is worse than none — it
+    // would sit in the store with no config AND block the retry, because we
+    // refuse to create a second product with the same title.
     try {
-      await configureDefaultVariant(created.numericVariantId, priceGbp);
+      if (isMultiSize) {
+        // Match Shopify's variants back to our sizes BY LABEL, not by position —
+        // Shopify does not promise to return them in the order we sent.
+        const priced = sizes
+          .map((s) => {
+            const v = created.variants.find((cv) => cv.label === s.label);
+            return v ? { numericVariantId: v.numericId, priceGbp: s.priceGbp } : null;
+          })
+          .filter((p): p is { numericVariantId: string; priceGbp: number } => p !== null);
+
+        if (priced.length !== sizes.length) {
+          throw new Error(
+            `Shopify created ${created.variants.length} variants but only ${priced.length} of ${sizes.length} sizes matched by label`
+          );
+        }
+        await setVariantPrices(created.numericId, priced);
+      } else {
+        try {
+          await configureDefaultVariant(created.numericVariantId, priceGbp);
+        } catch (e) {
+          console.warn("configureDefaultVariant failed", e);
+        }
+      }
     } catch (e) {
-      console.warn("configureDefaultVariant failed", e);
+      try {
+        await deleteProduct(created.numericId);
+      } catch (cleanupErr) {
+        console.error("cleanup deleteProduct failed", cleanupErr);
+        throw new Error(
+          `${e instanceof Error ? e.message : "Create failed"} — and the half-made product could not be removed. Delete "${title}" in Shopify admin before retrying.`
+        );
+      }
+      throw e;
     }
 
     try {
@@ -107,8 +150,24 @@ export async function POST(req: Request) {
       }
     }
 
+    // Stamp Shopify's real variant ids into the config. This is the link the
+    // editor uses to turn "?variantId=123" into the right print dimensions —
+    // without it a multi-size product has no way to know which size was picked.
+    let config: AnyConfig = body.config;
+    if (isMultiSize) {
+      const canvas = body.config as CanvasConfig;
+      config = {
+        ...canvas,
+        variants: sizes.map((s) => ({
+          ...s,
+          variantId:
+            created.variants.find((cv) => cv.label === s.label)?.numericId ?? "",
+        })),
+      };
+    }
+
     const metafieldKey = body.kind === "template" ? "template_config" : "canvas_config";
-    await setProductMetafield(created.numericId, "custom", metafieldKey, body.config);
+    await setProductMetafield(created.numericId, "custom", metafieldKey, config);
 
     return NextResponse.json({
       ok: true,

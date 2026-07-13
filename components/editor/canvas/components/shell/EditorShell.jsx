@@ -19,7 +19,10 @@ export default function EditorShell({
 
   // Full-size preview of the customer's design (data URL), null = closed.
   const [preview, setPreview] = useState(null)
-  const hasDesign = layers.length > 0
+  // A background on its own IS a design — it is baked into the export by
+  // renderPrint(), so it must not leave Preview greyed out.
+  const hasBackground = doc.background && doc.background.type !== 'none'
+  const hasDesign = layers.length > 0 || hasBackground
 
   const onProcess = async () => {
     // Cap the export edge when a host handler will POST it to the export API.
@@ -35,7 +38,9 @@ export default function EditorShell({
   }
 
   const openPreview = async () => {
-    const png = await api.canvas.current.exportPNG({ maxEdge: 1400 })
+    // preview: paint the blank board white. The print file stays transparent —
+    // this is only what the customer looks at.
+    const png = await api.canvas.current.exportPNG({ maxEdge: 1400, preview: true })
     if (png) setPreview(png)
   }
 
@@ -125,9 +130,6 @@ export default function EditorShell({
                 rel="noopener noreferrer"
               >
                 Open full size
-              </a>
-              <a className="ps-btn ps-btn--outline" href={preview} download={`${doc.name || 'design'}.png`}>
-                Download
               </a>
               <div className="ps-bottombar__spacer" />
               <button
