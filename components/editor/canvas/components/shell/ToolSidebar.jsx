@@ -9,6 +9,9 @@ import TextPanel from './panels/TextPanel'
 import ShapeLibraryPanel from './panels/ShapeLibraryPanel'
 import ShapeEditPanel from './panels/ShapeEditPanel'
 import ClipartLibraryPanel from './panels/ClipartLibraryPanel'
+import BackgroundsPanel from './panels/BackgroundsPanel'
+import GalleryPanel from './panels/GalleryPanel'
+import QrPanel from './panels/QrPanel'
 
 const TOOLS = [
   {
@@ -61,7 +64,6 @@ export default function ToolSidebar() {
 
   const onSub = (subId) => {
     setActiveSub(subId)
-    // Sub-panels (clipart grid, backgrounds, shapes, gallery, QR) wire in next.
   }
 
   // Clipart library stays open while browsing/adding (takes priority over a
@@ -70,6 +72,33 @@ export default function ToolSidebar() {
     return (
       <aside className="ps-sidebar">
         <ClipartLibraryPanel onBack={() => setActiveSub(null)} />
+      </aside>
+    )
+  }
+
+  // Backgrounds — sets the printable surface colour (doc.background).
+  if (activeSub === 'backgrounds') {
+    return (
+      <aside className="ps-sidebar">
+        <BackgroundsPanel onBack={() => setActiveSub(null)} />
+      </aside>
+    )
+  }
+
+  // Gallery — the customer's uploads this session, re-addable.
+  if (activeSub === 'gallery') {
+    return (
+      <aside className="ps-sidebar">
+        <GalleryPanel onBack={() => setActiveSub(null)} />
+      </aside>
+    )
+  }
+
+  // QR code generator.
+  if (activeSub === 'qrcode') {
+    return (
+      <aside className="ps-sidebar">
+        <QrPanel onBack={() => setActiveSub(null)} />
       </aside>
     )
   }
