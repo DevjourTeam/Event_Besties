@@ -18,13 +18,15 @@ const EDIT_ITEMS = [
 ]
 
 export default function CanvasOverlayTools() {
-  const { layers, selection, canUndo, canRedo } = useEditorState()
+  const { layers, selection, canUndo, canRedo, doc } = useEditorState()
   const api = useEditorApi()
   const [menu, setMenu] = useState(null) // 'zoom' | 'edit' | null
 
   const hasObjects = layers.length > 0
   const hasSelection = selection.count > 0
-  if (!hasObjects && !hasSelection) return null
+  // a colour/pattern background can be removed even with an empty canvas
+  const hasBackground = doc.background && doc.background.type !== 'none'
+  if (!hasObjects && !hasSelection && !hasBackground) return null
 
   const call = (name, arg) => {
     api.canvas.current?.[name]?.(arg)
@@ -106,12 +108,28 @@ export default function CanvasOverlayTools() {
       </div>
 
       {/* bottom-left: clear all */}
-      {hasObjects && (
+      {(hasObjects || hasBackground) && (
         <div className="ps-ovl ps-ovl--bl">
-          <button type="button" className="ps-ovl__clear" onClick={() => call('clearAll')}>
-            <i className="nxi nxi-clear" aria-hidden="true" />
-            Clear all
-          </button>
+          {hasObjects && (
+            <button type="button" className="ps-ovl__clear" onClick={() => call('clearAll')}>
+              <i className="nxi nxi-clear" aria-hidden="true" />
+              Clear all
+            </button>
+          )}
+          {hasBackground && (
+            <button
+              type="button"
+              className="ps-ovl__clear"
+              onClick={() => {
+                api.patchDoc({ background: { type: 'none', value: null } })
+                setMenu(null)
+              }}
+              title="Remove the background"
+            >
+              <i className="nxi nxi-trash" aria-hidden="true" />
+              Background
+            </button>
+          )}
         </div>
       )}
     </>

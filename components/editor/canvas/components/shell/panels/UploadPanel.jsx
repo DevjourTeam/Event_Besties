@@ -14,7 +14,8 @@ export default function UploadPanel({ onBack }) {
   const { recentUploads } = useEditorState()
   const api = useEditorApi()
   const inputRef = useRef(null)
-  const [agreed, setAgreed] = useState(false)
+  // pre-agreed: uploading is the primary action, an unchecked box just blocks it
+  const [agreed, setAgreed] = useState(true)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
 

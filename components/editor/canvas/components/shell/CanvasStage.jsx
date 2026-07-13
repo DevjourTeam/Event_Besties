@@ -36,6 +36,57 @@ const WORK_PAD = 90
 // within the canvas, so the controls are always reachable.
 const CTRL_PAD = 26
 
+/**
+ * Tile geometry for a background pattern.
+ *
+ * `size` is a 1-10 slider where 5 == the image's ORIGINAL pixel size, so the
+ * default never up-scales (and therefore never blurs). `spacing` adds a gap
+ * between tiles, and "brick" offsets every other row by half a tile.
+ */
+export function patternTile(bg, img, printW, printH) {
+  const natW = img.naturalWidth || img.width || 1
+  const natH = img.naturalHeight || img.height || 1
+  const fit = bg.fit || 'repeat'
+
+  if (fit === 'exact') return { w: printW, h: printH, gap: 0, repeat: false, brick: false }
+  if (fit === 'scale') {
+    // cover the print area, keeping aspect
+    const s = Math.max(printW / natW, printH / natH)
+    return { w: natW * s, h: natH * s, gap: 0, repeat: false, brick: false }
+  }
+  // repeat: 5 = original size
+  const scale = (bg.size ?? 5) / 5
+  const gap = bg.spacing ?? 0
+  return {
+    w: natW * scale,
+    h: natH * scale,
+    gap,
+    repeat: true,
+    brick: (bg.mode || 'brick') === 'brick',
+  }
+}
+
+/** Fabric Pattern for the export, matching what the screen shows. */
+function buildFabricPattern(bg, img, printW, printH) {
+  const t = patternTile(bg, img, printW, printH)
+  const natW = img.naturalWidth || img.width || 1
+  const natH = img.naturalHeight || img.height || 1
+
+  if (!t.repeat) {
+    // single, stretched/scaled tile — no repetition
+    return new Pattern({
+      source: img,
+      repeat: 'no-repeat',
+      patternTransform: [t.w / natW, 0, 0, t.h / natH, 0, 0],
+    })
+  }
+  return new Pattern({
+    source: img,
+    repeat: 'repeat',
+    patternTransform: [t.w / natW, 0, 0, t.h / natH, 0, 0],
+  })
+}
+
 export default function CanvasStage() {
   const { doc } = useEditorState()
   const api = useEditorApi()
@@ -61,6 +112,9 @@ export default function CanvasStage() {
   // true while a scratch object is on the canvas for export — suppresses the
   // add/remove side effects (history, layers, thumbnail)
   const exportingRef = useRef(false)
+  // decoded background-pattern image, shared by the on-screen surface and export
+  const patternImgRef = useRef(null)
+  const [patternImg, setPatternImg] = useState(null)
 
   // ---- fit the printable area into the container, preserving doc aspect ----
   // The workspace margin is reserved on top, so the whole Fabric canvas fits.
@@ -155,6 +209,15 @@ export default function CanvasStage() {
       if (moved) { obj.set({ left, top }); obj.setCoords() }
     }
 
+    // Keep a texture fill at its native pixel size while the object is resized,
+    // otherwise the tile is scaled up with the object and goes blurry.
+    const refitPattern = (o) => {
+      if (!o || !o.fill || typeof o.fill !== 'object' || !o.fill.source) return
+      const sx = o.scaleX || 1
+      const sy = o.scaleY || 1
+      o.fill.patternTransform = [1 / sx, 0, 0, 1 / sy, 0, 0]
+    }
+
     const updateDimLabel = () => {
       const el2 = dimLabelRef.current
       if (!el2) return
@@ -230,12 +293,20 @@ export default function CanvasStage() {
         if (longest > maxEdge) mult *= maxEdge / longest
       }
 
+      // The printable surface: a colour, a repeating pattern, or plain white.
+      let fill = '#ffffff'
+      const b = d.background
+      if (b?.type === 'color') fill = b.value
+      else if (b?.type === 'pattern' && patternImgRef.current) {
+        fill = buildFabricPattern(b, patternImgRef.current, pw, ph)
+      } else if (b?.type === 'none') fill = 'transparent'
+
       const bg = new Path(buildShapePath(d.shape, pw, ph), {
         left: WORK_PAD,
         top: WORK_PAD,
         originX: 'left',
         originY: 'top',
-        fill: d.background?.type === 'color' ? d.background.value : '#ffffff',
+        fill,
         selectable: false,
         evented: false,
       })
@@ -289,11 +360,11 @@ export default function CanvasStage() {
       if (exportingRef.current) return
       syncLayers(); pushHistory(); updateDimLabel(); syncThumb()
     })
-    fc.on('object:modified', (e) => { constrainObject(e.target); pushHistory(); syncSelection(); syncThumb() })
+    fc.on('object:modified', (e) => { constrainObject(e.target); refitPattern(e.target); pushHistory(); syncSelection(); syncThumb() })
     fc.on('text:changed', syncThumb)
     // live dimension label + boundary constraint while moving / scaling / rotating
     fc.on('object:moving', (e) => { constrainObject(e.target); updateDimLabel() })
-    fc.on('object:scaling', (e) => { constrainObject(e.target); updateDimLabel() })
+    fc.on('object:scaling', (e) => { constrainObject(e.target); refitPattern(e.target); updateDimLabel() })
     fc.on('object:rotating', updateDimLabel)
     fc.on('after:render', () => { if (fc.getActiveObject()) updateDimLabel() })
 
@@ -570,13 +641,29 @@ export default function CanvasStage() {
         }
       },
       // fill the active object with a texture image (glitter/foil/pattern)
+      /**
+       * Fill the active object with a texture (glitter / foil / pattern).
+       *
+       * A Fabric pattern is painted in the OBJECT's local space, so it gets
+       * scaled by the object's scaleX/scaleY — blow the text up and the glitter
+       * blows up with it, going soft and blurry. Counter-scale the pattern by
+       * 1/scale so the tile always renders at its native pixel size and simply
+       * repeats more times across a bigger object. Stays crisp at any size.
+       */
       setPatternFill: async (url) => {
         const o = fc.getActiveObject()
         if (!o) return
         try {
           const imgEl = await fabricUtil.loadImage(url, { crossOrigin: 'anonymous' })
-          const pattern = new Pattern({ source: imgEl, repeat: 'repeat' })
+          const sx = o.scaleX || 1
+          const sy = o.scaleY || 1
+          const pattern = new Pattern({
+            source: imgEl,
+            repeat: 'repeat',
+            patternTransform: [1 / sx, 0, 0, 1 / sy, 0, 0],
+          })
           o.set('fill', pattern)
+          o.__patternSrc = url // so a later resize can re-fit the tile
           fc.requestRenderAll()
           pushHistory()
         } catch {
@@ -762,6 +849,32 @@ export default function CanvasStage() {
     fc.requestRenderAll()
   }, [box.w, box.h, doc.shape, doc.background])
 
+  // ---- decode the background pattern once, for both the screen and the export ----
+  useEffect(() => {
+    const src = doc.background?.type === 'pattern' ? doc.background.src : null
+    if (!src) {
+      patternImgRef.current = null
+      setPatternImg(null)
+      return
+    }
+    let alive = true
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      if (!alive) return
+      patternImgRef.current = img
+      setPatternImg(img)
+      fabricRef.current?.requestRenderAll()
+    }
+    img.onerror = () => {
+      if (!alive) return
+      patternImgRef.current = null
+      setPatternImg(null)
+    }
+    img.src = src
+    return () => { alive = false }
+  }, [doc.background?.type, doc.background?.src])
+
   // ---- dimension + boundary overlay path (DOM SVG, non-interactive) ----
   const overlayPath = box.w && box.h ? buildShapePath(doc.shape, box.w, box.h) : ''
 
@@ -775,8 +888,20 @@ export default function CanvasStage() {
     width: box.w,
     height: box.h,
   }
+  // On-screen printable surface: colour, pattern (SVG <pattern>) or transparent.
+  const bgDef = doc.background
+  const patTile =
+    bgDef?.type === 'pattern' && patternImg && box.w
+      ? patternTile(bgDef, patternImg, box.w, box.h)
+      : null
   const surfaceFill =
-    doc.background?.type === 'color' ? doc.background.value : '#ffffff'
+    bgDef?.type === 'color'
+      ? bgDef.value
+      : bgDef?.type === 'pattern' && patTile
+        ? 'url(#ps-bgpattern)'
+        : bgDef?.type === 'none'
+          ? 'transparent'
+          : '#ffffff'
 
   return (
     <div className="ps-canvas-wrap" ref={wrapRef}>
@@ -798,6 +923,36 @@ export default function CanvasStage() {
               height={box.h}
               viewBox={`0 0 ${box.w} ${box.h}`}
             >
+              {patTile && (
+                <defs>
+                  <pattern
+                    id="ps-bgpattern"
+                    patternUnits="userSpaceOnUse"
+                    width={patTile.repeat ? patTile.w + patTile.gap : box.w}
+                    height={patTile.repeat ? patTile.h + patTile.gap : box.h}
+                  >
+                    <image
+                      href={doc.background.src}
+                      x="0"
+                      y="0"
+                      width={patTile.w}
+                      height={patTile.h}
+                      preserveAspectRatio={patTile.repeat ? 'none' : 'xMidYMid slice'}
+                    />
+                    {/* brick: repeat the tile offset by half, on the row below */}
+                    {patTile.repeat && patTile.brick && (
+                      <image
+                        href={doc.background.src}
+                        x={-(patTile.w + patTile.gap) / 2}
+                        y={(patTile.h + patTile.gap) / 2}
+                        width={patTile.w}
+                        height={patTile.h}
+                        preserveAspectRatio="none"
+                      />
+                    )}
+                  </pattern>
+                </defs>
+              )}
               <path d={overlayPath} className="ps-shape-surface" fill={surfaceFill} />
             </svg>
           </div>
