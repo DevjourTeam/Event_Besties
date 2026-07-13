@@ -6,6 +6,11 @@
  * image is the same path with the `thumb_` prefix dropped — verified to exist
  * (e.g. the S3 one is 4.2MB full vs 2.4KB thumb).
  */
+// Whole-board artwork rather than a repeating tile — these are ~10631x21259 and
+// must FILL the board once ('exact'), not tile. Tiles (150x150) default to
+// 'repeat'. Without this the artwork tiles at thumbnail size and looks wrong.
+const ARTWORK = new Set(['202604150801394240', '202604150801137130'])
+
 const THUMBS = [
   'https://imprintawsbucket.s3.eu-north-1.amazonaws.com/assets/backgrounds/thumb_202604150801394240.jpg',
   'https://imprintawsbucket.s3.eu-north-1.amazonaws.com/assets/backgrounds/thumb_202604150801137130.jpg',
@@ -30,8 +35,13 @@ const THUMBS = [
   'https://partiesandsigns.com/designer/assets/backgrounds/thumb_202003300117121579.png',
 ]
 
-export const BACKGROUNDS = THUMBS.map((thumb) => ({
-  id: thumb.split('/').pop().replace(/^thumb_/, '').replace(/\.[^.]+$/, ''),
-  thumb,
-  full: thumb.replace('/thumb_', '/'),
-}))
+export const BACKGROUNDS = THUMBS.map((thumb) => {
+  const id = thumb.split('/').pop().replace(/^thumb_/, '').replace(/\.[^.]+$/, '')
+  return {
+    id,
+    thumb,
+    full: thumb.replace('/thumb_', '/'),
+    // the fit this background is designed for
+    fit: ARTWORK.has(id) ? 'exact' : 'repeat',
+  }
+})

@@ -54,35 +54,44 @@ export function patternTile(bg, img, printW, printH) {
     const s = Math.max(printW / natW, printH / natH)
     return { w: natW * s, h: natH * s, gap: 0, repeat: false, brick: false }
   }
-  // repeat: 5 = original size
+  // Repeat: 5 == the image's original pixel size.
+  //
+  // The library mixes true tiles (150x150) with whole-board artwork (one is
+  // 10631x21259). At "original size" that artwork makes a single tile far wider
+  // than the board, so you only ever see a tiny crop of it — which reads as a
+  // flat colour. Clamp the tile so it can never exceed the print area: real
+  // tiles are untouched, oversized artwork simply fills the board once.
   const scale = (bg.size ?? 5) / 5
-  const gap = bg.spacing ?? 0
+  let w = natW * scale
+  let h = natH * scale
+  const k = Math.min(1, printW / w, printH / h)
+  w *= k
+  h *= k
   return {
-    w: natW * scale,
-    h: natH * scale,
-    gap,
+    w,
+    h,
+    gap: bg.spacing ?? 0,
     repeat: true,
     brick: (bg.mode || 'brick') === 'brick',
   }
 }
 
-/** Fabric Pattern for the export, matching what the screen shows. */
-function buildFabricPattern(bg, img, printW, printH) {
-  const t = patternTile(bg, img, printW, printH)
+/**
+ * Fabric Pattern for the export, matching what the screen shows.
+ *
+ * `img` is what gets painted (the full-resolution image when available), while
+ * `geomImg` is what the tile geometry is derived from — the same thumbnail the
+ * screen used. Keeping the geometry on the thumbnail means the print tiles
+ * exactly like the preview, just at higher resolution.
+ */
+function buildFabricPattern(bg, img, printW, printH, geomImg) {
+  const t = patternTile(bg, geomImg || img, printW, printH)
   const natW = img.naturalWidth || img.width || 1
   const natH = img.naturalHeight || img.height || 1
 
-  if (!t.repeat) {
-    // single, stretched/scaled tile — no repetition
-    return new Pattern({
-      source: img,
-      repeat: 'no-repeat',
-      patternTransform: [t.w / natW, 0, 0, t.h / natH, 0, 0],
-    })
-  }
   return new Pattern({
     source: img,
-    repeat: 'repeat',
+    repeat: t.repeat ? 'repeat' : 'no-repeat',
     patternTransform: [t.w / natW, 0, 0, t.h / natH, 0, 0],
   })
 }
@@ -114,6 +123,8 @@ export default function CanvasStage() {
   const exportingRef = useRef(false)
   // decoded background-pattern image, shared by the on-screen surface and export
   const patternImgRef = useRef(null)
+  // full-resolution copy, used only for the export (the screen uses the thumb)
+  const printImgRef = useRef(null)
   const [patternImg, setPatternImg] = useState(null)
   // hotlinked backgrounds can be several MB — show a loader on the canvas
   const [bgLoading, setBgLoading] = useState(false)
@@ -299,8 +310,12 @@ export default function CanvasStage() {
       let fill = '#ffffff'
       const b = d.background
       if (b?.type === 'color') fill = b.value
-      else if (b?.type === 'pattern' && patternImgRef.current) {
-        fill = buildFabricPattern(b, patternImgRef.current, pw, ph)
+      else if (b?.type === 'pattern') {
+        // Print with the FULL-resolution image when it has arrived; the screen
+        // only ever uses the cheap thumbnail. Same patternTile geometry, so the
+        // export matches what the customer saw.
+        const img = printImgRef.current || patternImgRef.current
+        if (img) fill = buildFabricPattern(b, img, pw, ph, patternImgRef.current)
       } else if (b?.type === 'none') fill = 'transparent'
 
       const bg = new Path(buildShapePath(d.shape, pw, ph), {
@@ -856,36 +871,52 @@ export default function CanvasStage() {
     const src = doc.background?.type === 'pattern' ? doc.background.src : null
     if (!src) {
       patternImgRef.current = null
+      printImgRef.current = null
       setPatternImg(null)
       setBgLoading(false)
       return
     }
     let alive = true
+    const thumb = doc.background?.thumb
+
+    const decode = (url) =>
+      new Promise((resolve, reject) => {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = url
+      })
+
+    // Screen: use the THUMBNAIL — it is a couple of KB and decodes instantly,
+    // where a full-size background can be 4MB+ and stall the canvas.
+    // Print: fetch the full-size in the background (no loader) and swap it in,
+    // so the export is crisp even though the preview was cheap.
+    printImgRef.current = null
     setBgLoading(true)
-    // Hotlinked backgrounds can be several MB; if the full-size image fails
-    // (CORS / 404) fall back to the thumbnail so the surface still renders.
-    const load = (url, onFail) => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
+    decode(thumb || src)
+      .catch(() => (thumb ? decode(src) : Promise.reject(new Error('no image'))))
+      .then((img) => {
         if (!alive) return
         patternImgRef.current = img
         setPatternImg(img)
         setBgLoading(false)
         fabricRef.current?.requestRenderAll()
-      }
-      img.onerror = () => {
+      })
+      .catch(() => {
         if (!alive) return
-        if (onFail) return onFail()
         patternImgRef.current = null
         setPatternImg(null)
         setBgLoading(false)
-      }
-      img.src = url
+      })
+
+    if (thumb && thumb !== src) {
+      decode(src)
+        .then((img) => { if (alive) printImgRef.current = img })
+        .catch(() => { /* keep the thumbnail for print rather than nothing */ })
     }
-    const thumb = doc.background?.thumb
-    load(src, thumb && thumb !== src ? () => load(thumb) : null)
-    return () => { alive = false; setBgLoading(false) }
+
+    return () => { alive = false }
   }, [doc.background?.type, doc.background?.src, doc.background?.thumb])
 
   // ---- dimension + boundary overlay path (DOM SVG, non-interactive) ----

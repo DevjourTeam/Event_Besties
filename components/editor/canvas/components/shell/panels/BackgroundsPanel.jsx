@@ -38,10 +38,14 @@ export default function BackgroundsPanel({ onBack }) {
 
   const setColor = (value) => api.patchDoc({ background: { type: 'color', value } })
   const clear = () => api.patchDoc({ background: { type: 'none', value: null } })
-  // `thumb` is kept as a fallback: the full-size image can be several MB and is
-  // hotlinked, so if it fails (CORS / 404) the surface still renders.
-  const setPattern = (src, thumb) =>
-    api.patchDoc({ background: { type: 'pattern', src, thumb: thumb || null, ...PATTERN_DEFAULTS } })
+  // `thumb` renders the canvas instantly (a few KB) while the full-size image —
+  // which can be 4MB+ — loads in the background for the print export.
+  // `fit` comes from the library: whole-board artwork fills once ('exact'),
+  // repeating tiles tile ('repeat').
+  const setPattern = (src, thumb, fit) =>
+    api.patchDoc({
+      background: { type: 'pattern', src, thumb: thumb || null, ...PATTERN_DEFAULTS, fit: fit || 'repeat' },
+    })
   const patchPattern = (patch) => {
     if (bg.type !== 'pattern') return
     api.patchDoc({ background: { ...bg, ...patch } })
@@ -157,7 +161,7 @@ export default function BackgroundsPanel({ onBack }) {
                 key={p.id}
                 type="button"
                 className={`ps-patcell${bg.type === 'pattern' && bg.src === p.full ? ' is-active' : ''}`}
-                onClick={() => setPattern(p.full, p.thumb)}
+                onClick={() => setPattern(p.full, p.thumb, p.fit)}
                 title={p.id}
               >
                 <img src={p.thumb} alt="" draggable={false} crossOrigin="anonymous" />
