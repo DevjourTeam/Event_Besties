@@ -9,8 +9,15 @@ import {
   CreateProductModal,
   type CreateProductSuccess,
 } from "@/components/admin/CreateProductModal";
-import type { CanvasConfig, CanvasShape, CanvasSizeVariant } from "@/lib/types";
+import type { CanvasConfig, CanvasShape } from "@/lib/types";
 import { buildShapePath } from "@/components/editor/canvas/editor/shapes";
+import {
+  SizesPanel,
+  priceLabelFor,
+  sizesValid,
+  DEFAULT_CANVAS_SIZES,
+  type DraftSize,
+} from "@/components/admin/SizesPanel";
 
 const SHAPE_OPTIONS: { value: CanvasShape; label: string }[] = [
   { value: "rect", label: "Rectangle" },
@@ -21,42 +28,27 @@ const SHAPE_OPTIONS: { value: CanvasShape; label: string }[] = [
   { value: "custom", label: "Custom SVG path" },
 ];
 
-/** A size the admin is still editing — no Shopify variant id yet. */
-type DraftSize = Omit<CanvasSizeVariant, "variantId">;
-
-// The arched sailboard sizes, prefilled because they are the common case.
-const DEFAULT_SIZES: DraftSize[] = [
-  { label: "5ft (150 x 74cm)", printWidthCm: 74, printHeightCm: 150, priceGbp: 69.99 },
-  { label: "6ft (180 x 90cm)", printWidthCm: 90, printHeightCm: 180, priceGbp: 89.99 },
-  { label: "7ft (210 x 105cm)", printWidthCm: 105, printHeightCm: 210, priceGbp: 109.99 },
-];
-
-const money = (n: number) => `£${n.toFixed(2)}`;
 
 export function CanvasBuilderPanel() {
   const toast = useToast();
   const router = useRouter();
 
-  const [sizes, setSizes] = useState<DraftSize[]>(DEFAULT_SIZES);
+  const [sizes, setSizes] = useState<DraftSize[]>(DEFAULT_CANVAS_SIZES);
   const [bleedPx, setBleedPx] = useState(10);
   const [safePx, setSafePx] = useState(22);
 
   const [displayW, setDisplayW] = useState(380);
   const [displayH, setDisplayH] = useState(500);
 
-  const [shape, setShape] = useState<CanvasShape>("rect");
+  // Arch is the sailboard — the product this store actually sells.
+  const [shape, setShape] = useState<CanvasShape>("arch");
   const [shapePath, setShapePath] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
   // Shown on the product page: a single price, or the range across sizes.
-  const priceLabel = useMemo(() => {
-    if (!sizes.length) return "£0.00";
-    const lo = Math.min(...sizes.map((s) => s.priceGbp));
-    const hi = Math.max(...sizes.map((s) => s.priceGbp));
-    return lo === hi ? money(lo) : `${money(lo)} – ${money(hi)}`;
-  }, [sizes]);
+  const priceLabel = useMemo(() => priceLabelFor(sizes), [sizes]);
 
   const buildConfig = (productName: string): CanvasConfig => ({
     type: "canvas",
@@ -77,7 +69,13 @@ export function CanvasBuilderPanel() {
     createdAt: new Date().toISOString().slice(0, 10),
     // variantId is filled in by the create-product route once Shopify has made
     // the variants — the admin cannot know the ids in advance.
-    variants: sizes.map((s) => ({ ...s, variantId: "" })),
+    variants: sizes.map((s) => ({
+      variantId: "",
+      label: s.label,
+      printWidthCm: s.printWidthCm ?? 100,
+      printHeightCm: s.printHeightCm ?? 150,
+      priceGbp: s.priceGbp,
+    })),
   });
 
   const config: CanvasConfig = useMemo(
@@ -86,22 +84,7 @@ export function CanvasBuilderPanel() {
     [displayW, displayH, sizes, bleedPx, safePx, shape, shapePath, priceLabel]
   );
 
-  const patchSize = (i: number, patch: Partial<DraftSize>) =>
-    setSizes((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
-  const addSize = () =>
-    setSizes((prev) => [
-      ...prev,
-      { label: `Size ${prev.length + 1}`, printWidthCm: 100, printHeightCm: 150, priceGbp: 0 },
-    ]);
-  const removeSize = (i: number) =>
-    setSizes((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev));
-
-  const sizesValid =
-    sizes.length > 0 &&
-    sizes.every(
-      (s) => s.label.trim() && s.printWidthCm > 0 && s.printHeightCm > 0
-    ) &&
-    new Set(sizes.map((s) => s.label.trim())).size === sizes.length;
+  const canCreate = sizesValid(sizes, true);
 
   const json = JSON.stringify(config, null, 2);
 
@@ -171,74 +154,20 @@ export function CanvasBuilderPanel() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-180px)]">
-      {/* LEFT — 360px form column */}
-      <div className="w-[360px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-6">
-        <Card title="Sizes">
-          <div className="space-y-3">
-            {sizes.map((s, i) => (
-              <div key={i} className="rounded-lg border border-card-border p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    value={s.label}
-                    onChange={(e) => patchSize(i, { label: e.target.value })}
-                    placeholder="6ft (180 x 90cm)"
-                    className="flex-1 h-9 px-3 rounded-lg border border-card-border bg-form-surface text-[12px] focus:outline-none focus:ring-2 focus:ring-gold/40"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeSize(i)}
-                    disabled={sizes.length <= 1}
-                    title={sizes.length <= 1 ? "A product needs at least one size" : "Remove size"}
-                    className="h-9 w-9 shrink-0 rounded-lg border border-card-border text-[13px] text-text-muted hover:bg-form-surface disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <NumberField
-                    label="W (cm)"
-                    value={s.printWidthCm}
-                    onChange={(v) => patchSize(i, { printWidthCm: v })}
-                    min={1}
-                  />
-                  <NumberField
-                    label="H (cm)"
-                    value={s.printHeightCm}
-                    onChange={(v) => patchSize(i, { printHeightCm: v })}
-                    min={1}
-                  />
-                  <NumberField
-                    label="Price (£)"
-                    value={s.priceGbp}
-                    onChange={(v) => patchSize(i, { priceGbp: v })}
-                    min={0}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+    // Sizes | settings | preview side by side, with the JSON as a full-width strip
+    // underneath. Each panel keeps its own column instead of collapsing into one
+    // long scroll.
+    <div className="flex flex-col min-h-[calc(100vh-180px)]">
+      <div className="flex flex-1 min-h-0">
+        {/* COLUMN 1 — sizes */}
+        <div className="w-[360px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-6">
+          <Card title="Sizes">
+            <SizesPanel sizes={sizes} onChange={setSizes} withDimensions />
+          </Card>
+        </div>
 
-          <button
-            type="button"
-            onClick={addSize}
-            className="mt-3 w-full h-9 rounded-lg border border-dashed border-card-border text-[12px] text-text-muted hover:bg-form-surface"
-          >
-            + Add another size
-          </button>
-
-          {!sizesValid && (
-            <p className="text-[10px] text-red-600 mt-2 leading-relaxed">
-              Every size needs a unique name and a width and height above zero.
-            </p>
-          )}
-          <p className="text-[10px] text-text-muted mt-2 leading-relaxed">
-            Each size becomes a Shopify variant under a <strong>Size</strong> option, priced
-            separately. The customer must pick one before the editor will open, and it is what sets
-            their canvas dimensions. Sizes are fixed once the product is created.
-          </p>
-        </Card>
-
+      {/* COLUMN 2 — the rest of the product settings, then the CTA */}
+      <div className="w-[340px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-6">
         <Card title="Bleed & safe zone">
           <div className="grid grid-cols-2 gap-3">
             <NumberField label="Bleed (px)" value={bleedPx} onChange={setBleedPx} min={0} />
@@ -296,7 +225,7 @@ export function CanvasBuilderPanel() {
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          disabled={publishing || !sizesValid}
+          disabled={publishing || !canCreate}
           className="w-full h-11 rounded-lg bg-gold hover:bg-gold-hover text-white text-[13px] font-semibold tracking-[0.02em] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
           {publishing && <Spinner size={14} />}
@@ -307,13 +236,21 @@ export function CanvasBuilderPanel() {
         </p>
       </div>
 
-      {/* RIGHT — preview + JSON */}
-      <div className="flex-1 min-w-0 overflow-y-auto p-8 space-y-6">
-        <div>
-          <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
-            Live preview
+        {/* COLUMN 3 — preview */}
+        <div className="flex-1 min-w-0 overflow-y-auto p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
+              Preview — as the customer will see it
+            </div>
+            <button
+              type="button"
+              onClick={previewInEditor}
+              className="inline-flex items-center h-7 px-2.5 rounded-md bg-[#1b2333] text-white text-[11px] hover:bg-[#10151f]"
+            >
+              Open in editor
+            </button>
           </div>
-          <div className="bg-white border border-card-border rounded-card p-8 flex items-center justify-center min-h-[400px]">
+          <div className="bg-white border border-card-border rounded-card p-5 flex items-center justify-center min-h-[500px]">
             <CanvasPreview
               displayW={displayW}
               displayH={displayH}
@@ -324,34 +261,34 @@ export function CanvasBuilderPanel() {
             />
           </div>
         </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
-              Canvas JSON
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={copyJson}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface"
-              >
-                <CopyIcon size={13} /> Copy
-              </button>
-              <button
-                type="button"
-                onClick={previewInEditor}
-                className="inline-flex items-center h-8 px-3 rounded-md bg-[#1b2333] text-white text-[11px] hover:bg-[#10151f]"
-              >
-                Preview in Editor
-              </button>
-            </div>
-          </div>
-          <pre className="bg-code-bg text-code-text text-[11px] font-mono leading-relaxed rounded-lg p-4 max-h-[420px] overflow-auto">
-            {json}
-          </pre>
-        </div>
       </div>
+
+      {/* FULL WIDTH — the config, under all three columns. A debugging aid, so it
+          collapses out of the way. */}
+      <details className="group shrink-0 border-t border-card-border bg-form-surface px-6 py-4">
+        <summary className="flex items-center justify-between cursor-pointer list-none">
+          <span className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
+            Canvas config (JSON)
+          </span>
+          <span className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                copyJson();
+              }}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface"
+            >
+              <CopyIcon size={12} /> Copy
+            </button>
+            <span className="text-[11px] text-text-muted group-open:hidden">Show</span>
+            <span className="text-[11px] text-text-muted hidden group-open:inline">Hide</span>
+          </span>
+        </summary>
+        <pre className="mt-3 bg-code-bg text-code-text text-[11px] font-mono leading-relaxed rounded-lg p-3 max-h-[240px] overflow-auto">
+          {json}
+        </pre>
+      </details>
 
       <CreateProductModal
         open={modalOpen}

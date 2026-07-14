@@ -17,6 +17,11 @@
   color: var(--ps-ink);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Fill the (centred) embed container instead of shrink-wrapping to the fixed
+     1200px stage. Without this, .ps-stage's `max-width: 100%` resolves against a
+     1200px parent and never clamps, so between the mobile breakpoint (860px) and
+     1200px the stage overflowed and the Save button was clipped off-screen. */
+  width: 100%;
 }
 
 /* ---- Stage container (the rounded gray box) ---- */
@@ -1480,4 +1485,35 @@
 .ps-bgloader__txt {
   font-family: var(--ps-font-ui); font-size: var(--ps-fs-sm);
   font-weight: 600; color: var(--ps-ink); white-space: nowrap;
+}
+
+/* ======================= template editor ======================= */
+/* The template editor reuses this shell. Its left panel is a scrolling list of
+   text fields rather than the canvas editor's tool cards, and its canvas is an
+   SVG rather than a Fabric surface — these are the only two differences. */
+.ps-sidebar {
+  overflow-y: auto;
+  min-height: 0;
+}
+.ps-sidebar--right {
+  border-left: 1px solid var(--ps-border);
+  padding-left: var(--ps-sp-3);
+}
+
+/* the composed SVG, centred in the canvas card */
+.ps-tpl-canvas {
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: var(--ps-sp-4);
+}
+.ps-tpl-canvas svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* A three-column stage when the right panel is showing. */
+.ps-editor .ps-stage:has(> .ps-sidebar--right) {
+  grid-template-columns: var(--ps-sidebar-w) 1fr 210px;
 }

@@ -49,6 +49,27 @@ function findProp(
 }
 
 /**
+ * True only for a print asset we produced: an https Cloudinary URL under our
+ * cloud, in the `print/` folder. Fulfilment is driven off this, so a customer
+ * cannot redirect it at an arbitrary URL by editing the line-item property.
+ */
+function isOwnPrintUrl(url: string): boolean {
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  if (!cloud) return false;
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === "https:" &&
+      u.hostname === "res.cloudinary.com" &&
+      u.pathname.startsWith(`/${cloud}/`) &&
+      u.pathname.includes("/print/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * POST /api/webhooks/shopify/order-paid
  *
  * Configure in Shopify Admin → Settings → Notifications → Webhooks:
@@ -100,6 +121,11 @@ export async function POST(req: Request) {
       findProp(item.properties, "_Print file") ??
       findProp(item.properties, "_print_file_url");
     if (!printUrl) continue;
+    // The print URL rides in on a customer-set line-item property, so it cannot
+    // be trusted blindly: only persist it for fulfilment if it is one of OUR
+    // Cloudinary print assets. Anything else (an attacker pointing fulfilment at
+    // an arbitrary URL) is dropped.
+    if (!isOwnPrintUrl(printUrl)) continue;
     designLines.push({
       lineItemId: item.id,
       sku: item.sku ?? null,

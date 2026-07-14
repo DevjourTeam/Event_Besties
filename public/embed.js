@@ -74,14 +74,48 @@
       return null;
     }
 
+    // A custom product must go through the editor, so every native purchase path
+    // has to be hidden — not only "Add to cart" but the express/dynamic checkout
+    // buttons ("Buy it now", Shop Pay, Apple Pay, Google Pay, PayPal), which
+    // would otherwise let a customer buy an UN-designed product. Themes render
+    // these under several class names and re-inject them after load, so the set
+    // is broad and we keep re-applying it.
+    function hideNativeBuyButtons() {
+      var selectors = [
+        '[name="add"]',
+        ".product-form__submit",
+        'button[type="submit"][name="add"]',
+        ".shopify-payment-button", // dynamic checkout wrapper
+        ".shopify-payment-button__button",
+        '[data-shopify="payment-button"]',
+        ".dynamic-checkout__content",
+        ".product-form__buttons .shopify-payment-button",
+      ];
+      for (var i = 0; i < selectors.length; i++) {
+        var nodes = document.querySelectorAll(selectors[i]);
+        for (var j = 0; j < nodes.length; j++) {
+          nodes[j].style.setProperty("display", "none", "important");
+        }
+      }
+    }
+
     function mountButton(config) {
       var addToCartBtn =
         document.querySelector('[name="add"]') ||
         document.querySelector(".product-form__submit") ||
         document.querySelector('button[type="submit"][name="add"]');
 
-      if (addToCartBtn) {
-        addToCartBtn.style.display = "none";
+      hideNativeBuyButtons();
+      // Some themes render the dynamic checkout button a beat after our script
+      // runs; re-hide for a few seconds, and again on any DOM change, so it can
+      // never flash back in.
+      var rehide = setInterval(hideNativeBuyButtons, 400);
+      setTimeout(function () {
+        clearInterval(rehide);
+      }, 6000);
+      if (window.MutationObserver) {
+        var mo = new MutationObserver(hideNativeBuyButtons);
+        mo.observe(document.body, { childList: true, subtree: true });
       }
 
       var hasSizes = (config.variants || []).length > 0;

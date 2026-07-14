@@ -111,6 +111,27 @@ export type TemplateConfig = {
   colorSlots?: TemplateColorSlot[];
   /** Uploaded faces, for artwork whose type isn't on Google Fonts. */
   customFonts?: CustomFont[];
+
+  /**
+   * Purchasable variants, in dropdown order. Unlike a canvas, a template's
+   * artwork is fixed — the size options only change the PRICE, so there are no
+   * per-variant dimensions. Absent on templates created before this existed:
+   * treat as "no choice, single price".
+   */
+  variants?: TemplateSizeVariant[];
+};
+
+/**
+ * One purchasable option of a template — a Shopify variant and its price.
+ * The artwork and print size are the same for every variant; only the price
+ * differs. Shares `variantId` semantics with CanvasSizeVariant: empty until the
+ * create-product route stamps in the id Shopify actually assigned.
+ */
+export type TemplateSizeVariant = {
+  variantId: string;
+  /** Shown in the storefront Size dropdown, e.g. "6ft (180 x 90cm)". */
+  label: string;
+  priceGbp: number;
 };
 
 /** True when this template was built by the v2 (auto-extract) builder. */

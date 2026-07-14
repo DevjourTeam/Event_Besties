@@ -2,45 +2,12 @@
 
 import type { DashboardItem } from "@/lib/types";
 import { EyeIcon } from "./Icons";
+import { CanvasShapeThumb } from "./CanvasShapeThumb";
 
 type TemplateCardProps = {
   item: DashboardItem;
   onPreview: (item: DashboardItem) => void;
 };
-
-function CanvasShapePreview({
-  displayW,
-  displayH,
-  printWidthCm,
-  printHeightCm,
-}: {
-  displayW: number;
-  displayH: number;
-  printWidthCm: number;
-  printHeightCm: number;
-}) {
-  const MAX_W = 220;
-  const MAX_H = 150;
-  const ratio = displayW / displayH;
-  let w = MAX_W;
-  let h = MAX_W / ratio;
-  if (h > MAX_H) {
-    h = MAX_H;
-    w = MAX_H * ratio;
-  }
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        className="bg-white border border-card-border shadow-sm rounded-sm"
-        style={{ width: w, height: h }}
-        aria-hidden
-      />
-      <div className="text-[10px] tracking-[0.06em] text-text-muted uppercase">
-        {printWidthCm} × {printHeightCm} cm
-      </div>
-    </div>
-  );
-}
 
 export function TemplateCard({ item, onPreview }: TemplateCardProps) {
   const { config } = item;
@@ -64,12 +31,7 @@ export function TemplateCard({ item, onPreview }: TemplateCardProps) {
             className="max-w-[80%] max-h-[150px] object-contain"
           />
         ) : !isTemplate ? (
-          <CanvasShapePreview
-            displayW={config.displayW}
-            displayH={config.displayH}
-            printWidthCm={config.printWidthCm}
-            printHeightCm={config.printHeightCm}
-          />
+          <CanvasShapeThumb config={config} maxW={220} maxH={150} />
         ) : (
           <div className="text-text-muted text-[11px]">No preview</div>
         )}

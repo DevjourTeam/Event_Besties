@@ -12,10 +12,44 @@
  *     a system Chrome / Edge install
  */
 
-import type { Browser } from "puppeteer-core";
+import type { Browser, Page, HTTPRequest } from "puppeteer-core";
 import { composeSvg, type ComposeSpec } from "./svg-template";
+import { fitTextFields, type FitField } from "./svg-fit";
 import { fontFaceCss } from "./custom-fonts";
 import type { CustomFont } from "./types";
+
+// The ONLY external hosts a render page may talk to. Everything renders from a
+// data: URI or these — Google Fonts (text) and jsdelivr (the Fabric bundle).
+const ALLOWED_HOSTS = new Set([
+  "fonts.googleapis.com",
+  "fonts.gstatic.com",
+  "cdn.jsdelivr.net",
+  "res.cloudinary.com", // our own uploaded fonts / assets
+]);
+
+/**
+ * Lock a render page to data: URIs and the allowlist above.
+ *
+ * This is the hard stop for SSRF: the export route renders customer-supplied SVG
+ * in a networked headless Chrome, so without this a crafted <foreignObject>/
+ * <image href="http://169.254.169.254/…"> could make Chrome fetch internal or
+ * cloud-metadata endpoints and return them inside the screenshot. Chrome now
+ * physically cannot reach anything off the allowlist.
+ */
+async function guardPage(page: Page): Promise<void> {
+  await page.setRequestInterception(true);
+  page.on("request", (req: HTTPRequest) => {
+    const url = req.url();
+    if (url.startsWith("data:") || url.startsWith("blob:")) return req.continue();
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      if (ALLOWED_HOSTS.has(host)) return req.continue();
+    } catch {
+      /* unparseable → block */
+    }
+    req.abort();
+  });
+}
 
 async function launchBrowser(): Promise<Browser> {
   const isServerless =
@@ -93,6 +127,7 @@ export async function renderTemplateV2(
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
+    await guardPage(page);
     await page.setViewport({
       width: Math.max(1, Math.ceil(width)),
       height: Math.max(1, Math.ceil(height)),
@@ -155,11 +190,53 @@ svg{display:block;width:${width}px;height:${height}px;}
       }, families);
     }
 
+    // Apply the SAME overflow fit the editor applied. This runs after the fonts
+    // are loaded, because it measures text — and it must run here rather than be
+    // trusted from the browser, or a customer could be shown shrunk-to-fit text
+    // and sent an overflowing print file.
+    await page.evaluate(
+      (src: string, svg: string, f: FitField[]) => {
+        const fit = new Function(`return (${src})`)() as (
+          a: string,
+          b: string,
+          c: FitField[]
+        ) => void;
+        fit("body", svg, f);
+      },
+      fitTextFields.toString(),
+      preparedSvg,
+      spec.textFields.map((f) => ({
+        nodeId: f.nodeId,
+        fontSize: f.fontSize,
+        align: f.align,
+      }))
+    );
+
     const shot = await page.screenshot({ type: "png", fullPage: false });
     return Buffer.from(shot);
   } finally {
     await browser.close();
   }
+}
+
+/**
+ * Strip the SVG constructs that turn a server-side render into an SSRF/XSS
+ * vector before it is injected into the page. Belt-and-braces with guardPage:
+ * the network guard already blocks the fetch, this removes the elements that
+ * would attempt it (and any that could execute script). Legitimate template
+ * artwork uses none of these.
+ */
+function sanitizeSvgForRender(svg: string): string {
+  return svg
+    .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, "")
+    .replace(/<\s*foreignObject[\s\S]*?<\s*\/\s*foreignObject\s*>/gi, "")
+    .replace(/<\s*(iframe|object|embed|animate|set|animateTransform)\b[\s\S]*?>/gi, "")
+    .replace(/\son\w+\s*=\s*(["'])[\s\S]*?\1/gi, "")
+    // external references — only data: URIs survive
+    .replace(
+      /\b(href|xlink:href|src)\s*=\s*(["'])\s*(?!data:)[^"']*\2/gi,
+      ""
+    );
 }
 
 export async function renderTemplateSVG(
@@ -171,6 +248,7 @@ export async function renderTemplateSVG(
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
+    await guardPage(page);
     await page.setViewport({
       width: Math.max(1, Math.ceil(width)),
       height: Math.max(1, Math.ceil(height)),
@@ -180,7 +258,7 @@ export async function renderTemplateSVG(
     const html = `<!doctype html><html><head><meta charset="utf-8">${fontLink}<style>
 html,body{margin:0;padding:0;background:#ffffff;}
 svg{display:block;width:${width}px;height:${height}px;}
-</style></head><body>${svgString}</body></html>`;
+</style></head><body>${sanitizeSvgForRender(svgString)}</body></html>`;
     await page.setContent(html, { waitUntil: "networkidle0" });
     // Wait until the browser confirms all @font-face downloads finished.
     // Without this Puppeteer can race ahead and screenshot before the
@@ -193,71 +271,6 @@ svg{display:block;width:${width}px;height:${height}px;}
     const screenshot = await page.screenshot({
       type: "png",
       fullPage: false,
-      omitBackground: false,
-    });
-    return Buffer.from(screenshot);
-  } finally {
-    await browser.close();
-  }
-}
-
-export async function renderFabricJSON(
-  fabricJSON: unknown,
-  width: number,
-  height: number
-): Promise<Buffer> {
-  const browser = await launchBrowser();
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({
-      width: Math.max(1, Math.ceil(width)),
-      height: Math.max(1, Math.ceil(height)),
-      deviceScaleFactor: clampScaleFactor(width, height),
-    });
-
-    const json = JSON.stringify(fabricJSON);
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;padding:0;background:#ffffff;}
-canvas{display:block;}
-</style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-</head><body>
-<canvas id="c" width="${width}" height="${height}"></canvas>
-<script>
-window.__rendered = false;
-window.__rendererror = null;
-try {
-  const c = new fabric.Canvas('c', {
-    width: ${width},
-    height: ${height},
-    backgroundColor: '#ffffff',
-    preserveObjectStacking: true,
-    selection: false
-  });
-  c.loadFromJSON(${json}, function () {
-    c.renderAll();
-    window.__rendered = true;
-  });
-} catch (e) {
-  window.__rendererror = String(e && e.message || e);
-}
-</script>
-</body></html>`;
-
-    await page.setContent(html, { waitUntil: "networkidle0" });
-    await page.waitForFunction(
-      "window.__rendered === true || window.__rendererror !== null",
-      { timeout: 20000 }
-    );
-    const error = await page.evaluate(
-      () => (window as unknown as { __rendererror: string | null }).__rendererror
-    );
-    if (error) throw new Error(`Fabric render error: ${error}`);
-
-    const handle = await page.$("canvas#c");
-    if (!handle) throw new Error("Canvas element not found in render page");
-    const screenshot = await handle.screenshot({
-      type: "png",
       omitBackground: false,
     });
     return Buffer.from(screenshot);

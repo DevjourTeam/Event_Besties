@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { DashboardItem } from "@/lib/types";
 import { CopyIcon, DownloadIcon, XIcon } from "./Icons";
 import { useRouter } from "next/navigation";
+import { CanvasShapeThumb } from "./CanvasShapeThumb";
 
 type PreviewModalProps = {
   item: DashboardItem | null;
@@ -110,6 +111,11 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
                 alt={config.productName}
                 className="max-w-full max-h-full object-contain"
               />
+            ) : config.type === "canvas" ? (
+              // A canvas has no artwork file — its cut shape is the preview. The
+              // old fallback showed a gradient with the product's initials, which
+              // told the admin nothing about the product.
+              <CanvasShapeThumb config={config} maxW={320} maxH={380} />
             ) : (
               <div
                 className="w-full h-full rounded-lg flex items-center justify-center"

@@ -238,11 +238,20 @@ export function prepareSvg(svgText: string): PreparedTemplate {
 
     if (family) fontSet.add(family);
 
+    // One tspan per line is how Illustrator writes a multi-line block, so the
+    // line structure IS the tspan list. Collapsing it with \s+ would fold three
+    // lines into one string, and the customer would get a single line running
+    // off the artboard.
+    const lineEls = Array.from(el.querySelectorAll("tspan"));
+    const value = lineEls.length
+      ? lineEls.map((t) => (t.textContent ?? "").trim()).join("\n")
+      : (el.textContent ?? "").replace(/\s+/g, " ").trim();
+
     textFields.push({
       nodeId,
-      label: (el.textContent ?? "").trim().slice(0, 28) || `Text ${i + 1}`,
+      label: value.split("\n")[0].slice(0, 28) || `Text ${i + 1}`,
       editable: true,
-      value: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
+      value,
       originalFont: family,
       // Left empty on purpose: the builder refuses to publish until the admin
       // maps this to a real Google family, so a template can never ship with a
@@ -313,6 +322,13 @@ export type ComposeSpec = {
     fontFamily: string;
     fontSize: number;
     fill: string;
+    /**
+     * The customer's alignment choice. composeSvg ignores it — aligning needs
+     * real text metrics, so it is applied later by fitTextFields, which runs in
+     * a rendered document. It rides along here so the screen and the print
+     * renderer are handed one identical spec and cannot drift.
+     */
+    align?: "left" | "center" | "right";
   }>;
   /** nodeId -> the text the customer typed. */
   textValues: Record<string, string>;
@@ -333,17 +349,24 @@ export function composeSvg(svgText: string, spec: ComposeSpec): string {
     const el = root.querySelector(`[data-tf="${field.nodeId}"]`);
     if (!el) continue;
 
-    // Inline style, not attributes — it outranks both the presentation
-    // attribute and any CSS class, so this works on every Illustrator export
-    // mode without disturbing the original declarations.
-    const set = (k: string, v: string) =>
+    // font-family is the ONLY thing we impose, because the admin may have
+    // remapped the face or uploaded it and the artwork's own name may not
+    // resolve. Everything else — fill, stroke, stroke-width, paint-order — is
+    // the designer's work and must survive untouched. Colour is not customer-
+    // editable in v2, so there is nothing here to override.
+    //
+    // Inline style, not an attribute: it outranks both the presentation
+    // attribute and any CSS class, so it lands on every Illustrator export mode
+    // without disturbing the original declarations.
+    if (field.fontFamily) {
       el.setAttribute(
         "style",
-        `${el.getAttribute("style") ?? ""};${k}:${v}`.replace(/^;/, "")
+        `${el.getAttribute("style") ?? ""};font-family:'${field.fontFamily}'`.replace(
+          /^;/,
+          ""
+        )
       );
-
-    if (field.fontFamily) set("font-family", `'${field.fontFamily}'`);
-    if (field.fill) set("fill", field.fill);
+    }
 
     const value = spec.textValues[field.nodeId];
     if (value === undefined) continue;
@@ -354,28 +377,56 @@ export function composeSvg(svgText: string, spec: ComposeSpec): string {
     const tspans = Array.from(el.querySelectorAll("tspan"));
     const lines = value.split("\n");
 
+    // Artwork whose <text> holds a bare string, with no tspans. A single line can
+    // stay as text content, but the customer pressing Enter has to produce real
+    // lines — so build tspans rather than flattening the breaks into spaces.
     if (tspans.length === 0) {
-      el.textContent = lines.join(" ");
+      if (lines.length === 1) {
+        el.textContent = lines[0];
+        continue;
+      }
+      const x = el.getAttribute("x") ?? "0";
+      const y0 = parseFloat(el.getAttribute("y") ?? "0");
+      const step = field.fontSize * 1.2;
+
+      while (el.firstChild) el.removeChild(el.firstChild);
+      lines.forEach((line, i) => {
+        const t = doc.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        t.setAttribute("x", x);
+        t.setAttribute("y", String(y0 + step * i));
+        t.textContent = line;
+        el.appendChild(t);
+      });
       continue;
     }
 
-    const first = tspans[0];
-    const x = first.getAttribute("x") ?? el.getAttribute("x") ?? "0";
-    const y0 = parseFloat(first.getAttribute("y") ?? el.getAttribute("y") ?? "0");
+    // Reuse the artwork's own tspans. Each one carries the designer's per-line
+    // work — the stroke that draws the outline, the different fill on the child's
+    // name — and building fresh ones would silently drop all of it, leaving flat
+    // untinted text. So: keep the existing nodes and swap only their content,
+    // clone the last one to grow, drop the surplus to shrink. Never touch an
+    // attribute we did not put there.
+    const y0 = parseFloat(
+      tspans[0].getAttribute("y") ?? el.getAttribute("y") ?? "0"
+    );
     const step =
       tspans.length > 1
         ? parseFloat(tspans[1].getAttribute("y") ?? "0") - y0
         : field.fontSize * 1.2;
-
-    while (el.firstChild) el.removeChild(el.firstChild);
+    const template = tspans[tspans.length - 1];
 
     lines.forEach((line, i) => {
-      const t = doc.createElementNS("http://www.w3.org/2000/svg", "tspan");
-      t.setAttribute("x", x);
-      t.setAttribute("y", String(y0 + step * i));
+      let t = tspans[i];
+      if (!t) {
+        // cloneNode(false): copies every attribute, drops the old text.
+        t = template.cloneNode(false) as typeof template;
+        t.setAttribute("y", String(y0 + step * i));
+        el.appendChild(t);
+      }
       t.textContent = line;
-      el.appendChild(t);
     });
+
+    for (let i = lines.length; i < tspans.length; i++) tspans[i].remove();
   }
 
   for (const [nodeId, hex] of Object.entries(spec.colorValues)) {

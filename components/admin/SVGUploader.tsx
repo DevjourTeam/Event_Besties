@@ -23,7 +23,7 @@ export function SVGUploader({ onLoaded }: Props) {
 
   return (
     <div
-      className="border-2 border-dashed border-card-border rounded-card bg-form-surface px-5 py-10 text-center cursor-pointer hover:bg-[#f3efe6] transition-colors"
+      className="border-2 border-dashed border-card-border rounded-card bg-form-surface px-4 py-4 flex items-center gap-3 cursor-pointer hover:bg-[#f3efe6] transition-colors"
       onClick={() => inputRef.current?.click()}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
@@ -32,14 +32,14 @@ export function SVGUploader({ onLoaded }: Props) {
         if (file) handleFile(file);
       }}
     >
-      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white border border-card-border text-text-muted">
-        <UploadCloudIcon size={22} />
+      <div className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white border border-card-border text-text-muted">
+        <UploadCloudIcon size={16} />
       </div>
-      <div className="mt-3 text-[14px] font-medium text-[#1b2333]">
-        Click to upload SVG
-      </div>
-      <div className="mt-1 text-[11px] text-text-muted">
-        Export from Illustrator with named layers
+      <div className="min-w-0 text-left">
+        <div className="text-[13px] font-medium text-[#1b2333]">Click to upload SVG</div>
+        <div className="text-[10px] text-text-muted leading-snug">
+          Export from Illustrator with named layers
+        </div>
       </div>
       <input
         ref={inputRef}

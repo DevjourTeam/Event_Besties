@@ -27,6 +27,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing templateId" }, { status: 400 });
   }
 
+  // Never build a public_id out of raw client input. A templateId is our own
+  // `cnv_…` / `tpl_…` / short handle — bound it to safe characters and a sane
+  // length so the signed public_id can't be steered into path traversal or an
+  // arbitrary Cloudinary object key.
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(templateId)) {
+    return NextResponse.json({ error: "Invalid templateId" }, { status: 400 });
+  }
+
   const folder = "print";
   const publicId = `${templateId}_${Date.now()}`;
 

@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import type { AnyConfig } from "@/lib/types";
 import { Spinner } from "@/components/Spinner";
 
-type Step = "design" | "printing";
+// The custom canvas editor's design system. Imported here so the template editor
+// wears the same skin — same stage, topbar, canvas card and bottom bar — instead
+// of a second look for what the customer experiences as one product.
+import "@/components/editor/canvas/styles/tokens.css";
+import "@/components/editor/canvas/styles/nxicons.css";
+import "@/components/editor/canvas/styles/shell.css";
 
 type EditorShellProps = {
   config: AnyConfig;
@@ -18,18 +23,15 @@ type EditorShellProps = {
 };
 
 /**
- * Fixed-viewport layout shared by both editor modes.
+ * The shell shared by both editor modes, in the custom editor's visual language:
  *
- *   ┌──────────────────────────────────────────────┐
- *   │ TOP BAR (52px)                               │
- *   ├────────┬───────────────────────┬─────────────┤
- *   │ LEFT   │      CANVAS AREA      │   RIGHT     │
- *   │ 260px  │       flex 1          │   210px     │
- *   │        │                       │ (hidden     │
- *   │        │                       │  until sel) │
- *   ├────────┴───────────────────────┴─────────────┤
- *   │ BOTTOM BAR (70px)                            │
- *   └──────────────────────────────────────────────┘
+ *   ┌─ ps-stage ─────────────────────────────────────┐
+ *   │ ps-sidebar │ ps-topbar                          │
+ *   │  (tools)   ├────────────────────────────────────┤
+ *   │            │ ps-canvas-wrap                     │
+ *   │            ├────────────────────────────────────┤
+ *   │            │ ps-bottombar (thumb · price · CTA) │
+ *   └────────────┴────────────────────────────────────┘
  */
 export function EditorShell({
   config,
@@ -41,7 +43,6 @@ export function EditorShell({
   onProcess,
   processing = false,
 }: EditorShellProps) {
-  const [step] = useState<Step>("design");
   const [tooSmall, setTooSmall] = useState(false);
 
   useEffect(() => {
@@ -57,8 +58,8 @@ export function EditorShell({
         <div className="max-w-xs">
           <div className="font-serif-display italic text-[24px]">Event Besties</div>
           <p className="mt-4 text-[13px] text-text-muted leading-relaxed">
-            This editor works best on desktop or tablet. Please reopen on a
-            larger screen to customize your design.
+            This editor works best on desktop or tablet. Please reopen on a larger
+            screen to customize your design.
           </p>
         </div>
       </div>
@@ -66,98 +67,60 @@ export function EditorShell({
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-cream text-[#1b2333]">
-      {/* TOP BAR */}
-      <header className="h-[52px] shrink-0 bg-white border-b border-card-border flex items-center px-6">
-        <div className="w-[260px] text-[15px] font-semibold tracking-[0.01em]">
-          Create Your Design
-        </div>
-        <div className="flex-1 flex items-center justify-center gap-3 text-[12px] text-text-muted">
-          <StepDot active={step === "design"} label="Create Your Design" />
-          <span className="w-8 h-px bg-card-border" />
-          <StepDot active={false} label="Printing" />
-        </div>
-        <div className="w-[260px] flex items-center justify-end">
-          {topRightActions}
-        </div>
-      </header>
+    <div className="ps-editor">
+      <div className="ps-stage">
+        <aside className="ps-sidebar">{leftPanel}</aside>
 
-      {/* MAIN ROW */}
-      <div className="flex-1 min-h-0 flex relative">
-        <aside className="w-[260px] shrink-0 bg-white border-r border-card-border overflow-y-auto">
-          {leftPanel}
-        </aside>
+        <section className="ps-main">
+          <header className="ps-topbar">
+            <span className="ps-topbar__title">{config.productName}</span>
+            <span className="ps-topbar__info" title="About this product">
+              <i className="nxi nxi-info" aria-hidden="true" />
+            </span>
+            <div className="ps-topbar__spacer" />
+            {topRightActions}
+          </header>
 
-        <section className="flex-1 min-w-0 flex items-center justify-center overflow-auto p-8">
-          {canvasArea}
+          <div className="ps-canvas-wrap ps-tpl-canvas">
+            {canvasArea}
+
+            {processing && (
+              <div className="ps-bgloader" role="status" aria-live="polite">
+                <div className="ps-bgloader__card">
+                  <span className="ps-bgloader__ring" aria-hidden="true" />
+                  <span className="ps-bgloader__txt">
+                    Generating your high-resolution print file…
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <footer className="ps-bottombar">
+            <div>
+              <div className="ps-thumb" title={config.productName}>
+                <span className="ps-thumb__dot" />
+              </div>
+              <div className="ps-thumb__label">{config.productName}</div>
+            </div>
+            <div className="ps-bottombar__spacer" />
+            <div className="ps-price">{config.price}</div>
+            <button
+              type="button"
+              className="ps-btn ps-btn--gold"
+              onClick={onProcess}
+              disabled={processing || !onProcess}
+            >
+              {processing && <Spinner size={14} />}
+              {processing ? "Processing…" : "Process"}
+            </button>
+          </footer>
         </section>
 
         {rightPanelVisible && rightPanel && (
-          <aside className="w-[210px] shrink-0 bg-white border-l border-card-border overflow-y-auto">
-            {rightPanel}
-          </aside>
-        )}
-
-        {processing && (
-          <div className="absolute inset-0 z-40 bg-black/30 flex items-center justify-center">
-            <div className="bg-white rounded-card shadow-xl px-6 py-5 flex items-center gap-4">
-              <span className="text-[#1b2333]">
-                <Spinner size={22} />
-              </span>
-              <div>
-                <div className="text-[13px] font-medium">
-                  Generating high-res file…
-                </div>
-                <div className="text-[11px] text-text-muted">
-                  This may take a few seconds
-                </div>
-              </div>
-            </div>
-          </div>
+          <aside className="ps-sidebar ps-sidebar--right">{rightPanel}</aside>
         )}
       </div>
-
-      {/* BOTTOM BAR */}
-      <footer className="h-[70px] shrink-0 bg-white border-t border-card-border flex items-center px-6 gap-4">
-        <div className="w-9 h-9 rounded-lg bg-form-surface border border-card-border flex items-center justify-center relative">
-          <div className="w-5 h-6 bg-white border border-card-border rounded-sm" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-gold" />
-        </div>
-        <div className="min-w-0">
-          <div className="text-[12px] font-medium truncate max-w-[260px]">
-            {config.productName}
-          </div>
-          <div className="text-[10px] text-text-muted uppercase tracking-[0.08em]">
-            {config.type === "template" ? "Premade Template" : "Custom Canvas"}
-          </div>
-        </div>
-        <div className="flex-1" />
-        <div className="font-serif-display text-[20px] font-bold text-[#1b2333]">
-          {config.price}
-        </div>
-        <button
-          type="button"
-          onClick={onProcess}
-          disabled={processing || !onProcess}
-          className="h-10 px-6 rounded-lg bg-gold hover:bg-gold-hover text-white text-[14px] font-bold tracking-[0.02em] disabled:opacity-60 inline-flex items-center gap-2"
-        >
-          {processing && <Spinner size={14} />}
-          {processing ? "Processing…" : "Process"}
-        </button>
-      </footer>
     </div>
-  );
-}
-
-function StepDot({ active, label }: { active: boolean; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <span
-        className={`w-2.5 h-2.5 rounded-full ${
-          active ? "bg-[#1b2333]" : "border border-text-muted"
-        }`}
-      />
-      <span className={active ? "text-[#1b2333]" : ""}>{label}</span>
-    </span>
   );
 }

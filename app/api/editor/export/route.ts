@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   renderTemplateSVG,
-  renderFabricJSON,
   renderTemplateV2,
 } from "@/lib/canvas-export";
 import { uploadJPEG, uploadPNG } from "@/lib/cloudinary";
@@ -24,6 +23,8 @@ type ExportBody = {
   productId?: string;
   /** v2 only. nodeId -> customer text. */
   textValues?: Record<string, string>;
+  /** v2 only. nodeId -> "left" | "center" | "right". Absent = as designed. */
+  alignValues?: Record<string, string>;
   /** v2 only. nodeId -> customer colour. */
   colorValues?: Record<string, string>;
   svgString?: string;
@@ -76,6 +77,16 @@ async function renderV2(body: ExportBody): Promise<Buffer> {
     );
   }
 
+  // Alignment, same rule as the text: only where the config says the field is
+  // editable, and only a value alignment can legally take. Anything else falls
+  // back to the artwork's own layout.
+  const ALIGNMENTS = ["left", "center", "right"] as const;
+  const alignOf = (nodeId: string, editable: boolean) => {
+    if (!editable) return undefined;
+    const v = body.alignValues?.[nodeId];
+    return ALIGNMENTS.find((a) => a === v);
+  };
+
   // Colour is not customer-editable in v2 — the artwork's own fills stand.
   return renderTemplateV2(
     preparedSvg,
@@ -85,6 +96,7 @@ async function renderV2(body: ExportBody): Promise<Buffer> {
         fontFamily: f.fontFamily,
         fontSize: f.fontSize,
         fill: f.fill,
+        align: alignOf(f.nodeId, f.editable),
       })),
       textValues,
       colorValues: {},
@@ -144,17 +156,11 @@ export async function POST(req: Request) {
       if (!pngBuffer.length) {
         return NextResponse.json({ error: "Empty pngBase64" }, { status: 400 });
       }
-    } else if (body.fabricJSON) {
-      pngBuffer = await renderFabricJSON(
-        body.fabricJSON,
-        body.displayW ?? 600,
-        body.displayH ?? 800
-      );
     } else {
-      return NextResponse.json(
-        { error: "Missing pngBase64 or fabricJSON" },
-        { status: 400 }
-      );
+      // The `fabricJSON` server-render path was removed: no client used it, and
+      // rendering arbitrary client JSON (with image URLs) in headless Chrome is
+      // an SSRF vector. The canvas editor uploads a finished PNG instead.
+      return NextResponse.json({ error: "Missing pngBase64" }, { status: 400 });
     }
 
     const stamp = `${body.templateId}_${Date.now()}`;

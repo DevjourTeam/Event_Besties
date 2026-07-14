@@ -10,7 +10,7 @@ import {
   setVariantPrices,
   uploadProductImage,
 } from "@/lib/shopify-admin";
-import type { AnyConfig, CanvasConfig } from "@/lib/types";
+import type { AnyConfig, CanvasConfig, TemplateConfig } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -76,10 +76,13 @@ export async function POST(req: Request) {
 
     const priceGbp = typeof body.priceGbp === "number" ? body.priceGbp : 0;
 
-    // A canvas product may define several sizes. Each becomes a Shopify variant
-    // under a "Size" option, so the customer must choose one before ordering.
-    const sizes =
-      body.kind === "canvas" ? (body.config as CanvasConfig).variants ?? [] : [];
+    // Either kind of product may define several sizes. Each becomes a Shopify
+    // variant under a "Size" option, so the customer must choose one before
+    // ordering. A canvas size also carries print dimensions; a template's does
+    // not (the artwork is fixed, only the price differs) — but Shopify only
+    // needs the label and the price either way, so this path is common to both.
+    const sizes: Array<{ label: string; priceGbp: number }> =
+      (body.config as CanvasConfig | TemplateConfig).variants ?? [];
     const isMultiSize = sizes.length > 0;
 
     const created = await createProduct({
@@ -155,15 +158,16 @@ export async function POST(req: Request) {
     // without it a multi-size product has no way to know which size was picked.
     let config: AnyConfig = body.config;
     if (isMultiSize) {
-      const canvas = body.config as CanvasConfig;
+      // Works for both kinds: whatever fields a size carries are spread through
+      // untouched, and only variantId is filled in.
       config = {
-        ...canvas,
+        ...body.config,
         variants: sizes.map((s) => ({
           ...s,
           variantId:
             created.variants.find((cv) => cv.label === s.label)?.numericId ?? "",
         })),
-      };
+      } as AnyConfig;
     }
 
     const metafieldKey = body.kind === "template" ? "template_config" : "canvas_config";

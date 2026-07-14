@@ -14,10 +14,22 @@ import {
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 import { prepareSvg, composeSvg, type PreparedTemplate } from "@/lib/svg-template";
+import { fitTextFields } from "@/lib/svg-fit";
 import { googleFontsHrefFor, isGoogleFont } from "@/lib/google-fonts";
 import { fontFaceCss } from "@/lib/custom-fonts";
 import type { TemplateConfig, TemplateTextField, CustomFont } from "@/lib/types";
 import { CopyIcon } from "@/components/admin/Icons";
+import {
+  SizesPanel,
+  priceLabelFor,
+  sizesValid,
+  DEFAULT_TEMPLATE_SIZES,
+  type DraftSize,
+} from "@/components/admin/SizesPanel";
+import { BuilderSection } from "@/components/admin/BuilderSection";
+
+/** The live preview; fitTextFields addresses it by id. */
+const PREVIEW_ID = "eb-builder-preview";
 
 /**
  * Template builder — v2. Text only.
@@ -38,6 +50,7 @@ export function SvgBuilderPanel() {
   const [textFields, setTextFields] = useState<TemplateTextField[]>([]);
   const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
 
+  const [sizes, setSizes] = useState<DraftSize[]>(DEFAULT_TEMPLATE_SIZES);
   const [modalOpen, setModalOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
@@ -147,9 +160,34 @@ export function SvgBuilderPanel() {
     }
   }, [prepared, textFields]);
 
+  /* The preview must show what the CUSTOMER will get, which means the same
+   * overflow fit the editor and the print renderer apply. Without this the admin
+   * sees type bleeding off the artwork that would never actually print that way. */
+  useEffect(() => {
+    if (!previewSvg || !prepared?.preparedSvg) return;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      try {
+        fitTextFields(
+          `#${PREVIEW_ID}`,
+          prepared.preparedSvg,
+          textFields.map((f) => ({ nodeId: f.nodeId, fontSize: f.fontSize }))
+        );
+      } catch {
+        /* an unrenderable preview is not worth breaking the builder over */
+      }
+    };
+    // fonts first: metrics in a fallback face would fit against the wrong widths
+    if (document.fonts?.ready) document.fonts.ready.then(run);
+    else run();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewSvg, prepared, textFields, customFonts, googleFamilies]);
+
   const buildConfig = (
     productName: string,
-    priceLabel: string,
     sourceSvgUrl: string
   ): TemplateConfig | null => {
     if (!prepared || prepared.fatal) return null;
@@ -170,17 +208,24 @@ export function SvgBuilderPanel() {
       // Only the Google ones belong here: uploaded faces come from our own CDN
       // via @font-face, not from a fonts.googleapis.com <link>.
       requiredFonts: googleFamilies,
-      price: priceLabel,
+      price: priceLabelFor(sizes),
       status: "published",
       createdAt: new Date().toISOString().slice(0, 10),
+      // A template's artwork is fixed, so a size only carries a price. Shopify's
+      // real variant ids are stamped in by the create-product route.
+      variants: sizes.map((s) => ({
+        variantId: "",
+        label: s.label,
+        priceGbp: s.priceGbp,
+      })),
     };
   };
 
   const configJson = useMemo(() => {
-    const c = buildConfig("Untitled Template", "£0", "");
+    const c = buildConfig("Untitled Template", "");
     return c ? JSON.stringify(c, null, 2) : "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prepared, textFields, customFonts, googleFamilies]);
+  }, [prepared, textFields, customFonts, googleFamilies, sizes]);
 
   const copyJson = async () => {
     if (!configJson) return;
@@ -226,11 +271,7 @@ export function SvgBuilderPanel() {
       const upJson = await upRes.json();
       if (!upRes.ok) return { error: upJson.error ?? "SVG upload failed" };
 
-      const config = buildConfig(
-        fields.title,
-        `£${fields.priceGbp.toFixed(2)}`,
-        upJson.svgUrl
-      );
+      const config = buildConfig(fields.title, upJson.svgUrl);
       if (!config) return { error: "Invalid template state" };
 
       const createRes = await fetch("/api/admin/create-product", {
@@ -240,7 +281,9 @@ export function SvgBuilderPanel() {
           kind: "template",
           title: fields.title,
           description: fields.description,
-          priceGbp: fields.priceGbp,
+          // Each size carries its own price; this is only the fallback used if
+          // the product somehow ends up with no sizes.
+          priceGbp: sizes[0]?.priceGbp ?? 0,
           imageDataUrl: fields.imageDataUrl,
           config,
         }),
@@ -276,110 +319,125 @@ export function SvgBuilderPanel() {
   };
 
   return (
+    // Artwork | sizes | preview | config, side by side. Each panel keeps its own
+    // column rather than stacking into one long scroll.
     <div className="flex min-h-[calc(100vh-180px)]">
-      {/* LEFT — form column */}
-      <div className="w-[340px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-5">
-        <SVGUploader onLoaded={handleLoaded} />
+      {/* COLUMN 1 — the artwork and the fields read out of it */}
+      <div className="w-[320px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-5 space-y-5">
+        <BuilderSection title="Artwork">
+          <SVGUploader onLoaded={handleLoaded} />
 
-        {prepared?.fatal && (
-          <div className="bg-white border border-[#f1cccc] rounded-card p-4">
-            <div className="text-[11px] tracking-[0.16em] uppercase text-text-muted mb-1">
-              {fileName}
-            </div>
-            <p className="text-[12px] text-[#a83232] leading-relaxed">
-              {prepared.fatal}
-            </p>
-          </div>
-        )}
-
-        {prepared && !prepared.fatal && (
-          <div className="bg-white border border-card-border rounded-card p-4 space-y-1.5">
-            <div className="text-[11px] tracking-[0.16em] uppercase text-text-muted mb-1">
-              {fileName}
-            </div>
-            <Stat label="Canvas" value={`${prepared.width} × ${prepared.height} px`} />
-            <Stat label="Text fields" value={`${prepared.textFields.length}`} />
-            <Stat label="File size" value={`${prepared.fileSizeKB} KB`} />
-          </div>
-        )}
-
-        {prepared && !prepared.fatal && (
-          <TemplateFieldEditor
-            textFields={textFields}
-            customFonts={customFonts}
-            unhostedFonts={unhostedFonts}
-            onTextChange={setTextFields}
-            onUploadFont={uploadFont}
-          />
-        )}
-
-        {prepared && !prepared.fatal && (
-          <div className="border-t border-card-border pt-5 space-y-3">
-            {missing.length > 0 && (
-              <p className="text-[11px] text-[#a06b1c] bg-[#fdf3e1] border border-[#f1ddb3] rounded-md px-2.5 py-2 leading-relaxed">
-                <strong>{missing.map((f) => f.label).join(", ")}</strong> still needs
-                a font the editor can fetch — upload the original, or pick a Google
-                one.
+          {prepared?.fatal && (
+            <div className="mt-3 border border-[#f1cccc] bg-[#fdf1f1] rounded-lg p-3">
+              <div className="text-[10px] tracking-[0.14em] uppercase text-text-muted mb-1">
+                {fileName}
+              </div>
+              <p className="text-[12px] text-[#a83232] leading-relaxed">
+                {prepared.fatal}
               </p>
-            )}
-            <button
-              type="button"
-              onClick={openCreateModal}
-              disabled={publishing || !ready}
-              className="w-full h-11 rounded-lg bg-gold hover:bg-gold-hover text-white text-[13px] font-semibold tracking-[0.02em] disabled:opacity-60 inline-flex items-center justify-center gap-2"
-            >
-              {publishing && <Spinner size={14} />}
-              {publishing ? "Creating…" : "Create Shopify product"}
-            </button>
-          </div>
+            </div>
+          )}
+
+          {prepared && !prepared.fatal && (
+            <div className="mt-3 rounded-lg border border-card-border p-3 space-y-1.5">
+              <div className="text-[10px] tracking-[0.14em] uppercase text-text-muted mb-1">
+                {fileName}
+              </div>
+              <Stat label="Canvas" value={`${prepared.width} × ${prepared.height} px`} />
+              <Stat label="Text fields" value={`${prepared.textFields.length}`} />
+              <Stat label="File size" value={`${prepared.fileSizeKB} KB`} />
+            </div>
+          )}
+        </BuilderSection>
+
+        {prepared && !prepared.fatal && (
+          <BuilderSection title="Text fields">
+            <TemplateFieldEditor
+              textFields={textFields}
+              customFonts={customFonts}
+              unhostedFonts={unhostedFonts}
+              onTextChange={setTextFields}
+              onUploadFont={uploadFont}
+            />
+          </BuilderSection>
         )}
       </div>
 
-      {/* RIGHT — preview + config */}
-      <div className="flex-1 min-w-0 overflow-y-auto p-8 space-y-6">
-        <div>
-          <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
-            Preview — as the customer will see it
-          </div>
-          <div className="bg-white border border-card-border rounded-card p-6 flex items-center justify-center min-h-[300px]">
-            {previewSvg ? (
-              <div
-                className="[&>svg]:max-w-full [&>svg]:max-h-[420px] [&>svg]:h-auto [&>svg]:w-auto"
-                // Safe: prepareSvg strips <script>, on* handlers and javascript: hrefs.
-                dangerouslySetInnerHTML={{ __html: previewSvg }}
-              />
-            ) : (
-              <div className="text-[12px] text-text-muted">
-                Upload an SVG to preview it here
-              </div>
-            )}
-          </div>
-        </div>
+      {/* COLUMN 2 — sizes, then the CTA */}
+      <div className="w-[320px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-5 space-y-5">
+        <BuilderSection title="Sizes & pricing">
+          <SizesPanel sizes={sizes} onChange={setSizes} />
+        </BuilderSection>
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
-              Template config
-            </div>
-            <button
-              type="button"
-              onClick={copyJson}
-              disabled={!configJson}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface disabled:opacity-50"
-            >
-              <CopyIcon size={13} /> Copy
-            </button>
-          </div>
-          <pre className="bg-code-bg text-code-text text-[11px] font-mono leading-relaxed rounded-lg p-4 max-h-[420px] overflow-auto">
-            {configJson || "// Upload an SVG to generate config"}
-          </pre>
+        <div className="space-y-3">
+          {missing.length > 0 && (
+            <p className="text-[11px] text-[#a06b1c] bg-[#fdf3e1] border border-[#f1ddb3] rounded-md px-2.5 py-2 leading-relaxed">
+              <strong>{missing.map((f) => f.label).join(", ")}</strong> still needs a
+              font the editor can fetch — upload the original, or pick a Google one.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={openCreateModal}
+            disabled={publishing || !ready || !sizesValid(sizes, false)}
+            className="w-full h-11 rounded-lg bg-gold hover:bg-gold-hover text-white text-[13px] font-semibold tracking-[0.02em] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+          >
+            {publishing && <Spinner size={14} />}
+            {publishing ? "Creating…" : "Create Shopify product"}
+          </button>
+          <p className="text-[10px] text-text-muted leading-relaxed text-center">
+            Creates {sizes.length} {sizes.length === 1 ? "variant" : "variants"} ·{" "}
+            {priceLabelFor(sizes)}
+          </p>
         </div>
+      </div>
+
+      {/* COLUMN 3 — preview */}
+      <div className="flex-1 min-w-0 overflow-y-auto p-6">
+        <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
+          Preview — as the customer will see it
+        </div>
+        <div className="bg-white border border-card-border rounded-card p-5 flex items-center justify-center min-h-[560px]">
+          {previewSvg ? (
+            <div
+              id={PREVIEW_ID}
+              className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-[520px] [&>svg]:h-auto [&>svg]:w-auto"
+              // Safe: prepareSvg strips <script>, on* handlers and javascript: hrefs.
+              dangerouslySetInnerHTML={{ __html: previewSvg }}
+            />
+          ) : (
+            <div className="text-[12px] text-text-muted">
+              Upload an SVG to preview it here
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* COLUMN 4 — the config, in its own column */}
+      <div className="w-[340px] shrink-0 border-l border-card-border overflow-y-auto p-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
+            Template config
+          </span>
+          <button
+            type="button"
+            onClick={copyJson}
+            disabled={!configJson}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface disabled:opacity-50"
+          >
+            <CopyIcon size={12} /> Copy
+          </button>
+        </div>
+        <pre className="bg-code-bg text-code-text text-[11px] font-mono leading-relaxed rounded-lg p-3 max-h-[calc(100vh-280px)] overflow-auto">
+          {configJson || "// Upload an SVG to generate config"}
+        </pre>
       </div>
 
       <CreateProductModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreate}
+        priceNote={`${sizes.length} ${sizes.length === 1 ? "size" : "sizes"} · ${priceLabelFor(sizes)} — each size is priced on the Sizes panel.`}
       />
     </div>
   );
