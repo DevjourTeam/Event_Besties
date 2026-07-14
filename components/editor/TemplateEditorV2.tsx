@@ -6,6 +6,7 @@ import { EditorShell } from "./EditorShell";
 import { useToast } from "@/components/Toast";
 import { handoffDesign } from "@/lib/cart-client";
 import { googleFontsHrefFor } from "@/lib/google-fonts";
+import { fontFaceCss } from "@/lib/custom-fonts";
 import { composeSvg } from "@/lib/svg-template";
 import type { TemplateConfig, WithProductImage } from "@/lib/types";
 import { useCanvasZoom } from "@/hooks/useCanvasZoom";
@@ -46,9 +47,7 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
   });
 
   const fields = useMemo(() => config.textFields ?? [], [config.textFields]);
-  const slots = useMemo(() => config.colorSlots ?? [], [config.colorSlots]);
   const editableFields = useMemo(() => fields.filter((f) => f.editable), [fields]);
-  const exposedSlots = useMemo(() => slots.filter((s) => s.exposed), [slots]);
 
   const [sourceSvg, setSourceSvg] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -57,13 +56,10 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
   const [textValues, setTextValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((f) => [f.nodeId, f.value]))
   );
-  const [colorValues, setColorValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(slots.map((s) => [s.nodeId, s.hex]))
-  );
 
-  // The fonts the admin mapped. Without these the design renders in a fallback
-  // face and looks broken — the builder guarantees every one is a real Google
-  // family, so this always resolves.
+  // Every font the design needs, from whichever of the two sources hosts it.
+  // Miss these and the type silently falls back and the design looks broken —
+  // the builder guarantees each one resolves, so this always lands.
   useEffect(() => {
     const href = googleFontsHrefFor(config.requiredFonts ?? []);
     if (!href) return;
@@ -73,6 +69,15 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
     document.head.appendChild(link);
     return () => link.remove();
   }, [config.requiredFonts]);
+
+  useEffect(() => {
+    const css = fontFaceCss(config.customFonts);
+    if (!css) return;
+    const style = document.createElement("style");
+    style.textContent = css;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, [config.customFonts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +110,7 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
           fill: f.fill,
         })),
         textValues,
-        colorValues,
+        colorValues: {},
       });
       const svg = containerRef.current.querySelector("svg");
       if (svg) {
@@ -115,7 +120,7 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
     } catch {
       setLoadError("Could not render this template");
     }
-  }, [sourceSvg, fields, textValues, colorValues, config.canvasWidth, config.canvasHeight]);
+  }, [sourceSvg, fields, textValues, config.canvasWidth, config.canvasHeight]);
 
   const handleProcess = async () => {
     if (!config.productId) {
@@ -135,7 +140,6 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
           templateId: config.templateId,
           productId: config.productId,
           textValues,
-          colorValues,
         }),
       });
       const data = await res.json();
@@ -181,7 +185,7 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
         </div>
       )}
 
-      {sourceSvg && editableFields.length === 0 && exposedSlots.length === 0 && (
+      {sourceSvg && editableFields.length === 0 && (
         <div className="text-[12px] text-text-muted">
           This template has no customer-editable fields.
         </div>
@@ -198,30 +202,6 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
               }
               className="w-full h-9 px-3 rounded-md border border-card-border bg-form-surface text-[13px] focus:outline-none focus:ring-2 focus:ring-gold/40"
             />
-          </FieldRow>
-        ))}
-
-      {sourceSvg &&
-        exposedSlots.map((s) => (
-          <FieldRow key={s.nodeId} label={s.label}>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={colorValues[s.nodeId] ?? s.hex}
-                onChange={(e) =>
-                  setColorValues((v) => ({ ...v, [s.nodeId]: e.target.value }))
-                }
-                className="w-10 h-9 p-0 border border-card-border rounded-md bg-white cursor-pointer"
-              />
-              <input
-                type="text"
-                value={colorValues[s.nodeId] ?? s.hex}
-                onChange={(e) =>
-                  setColorValues((v) => ({ ...v, [s.nodeId]: e.target.value }))
-                }
-                className="flex-1 h-9 px-2 rounded-md border border-card-border bg-form-surface text-[12px] font-mono uppercase"
-              />
-            </div>
           </FieldRow>
         ))}
     </div>

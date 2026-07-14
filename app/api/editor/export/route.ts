@@ -64,7 +64,8 @@ async function renderV2(body: ExportBody): Promise<Buffer> {
   if (!res.ok) throw new Error(`Could not load template artwork (${res.status})`);
   const preparedSvg = await res.text();
 
-  // Accept a value only where OUR config says the field is editable.
+  // Accept a value only where OUR config says the field is editable. A field the
+  // config marks locked keeps its authored copy no matter what was posted.
   const textValues: Record<string, string> = {};
   for (const f of config.textFields) {
     if (!f.editable) continue;
@@ -75,14 +76,7 @@ async function renderV2(body: ExportBody): Promise<Buffer> {
     );
   }
 
-  // Same for colour, and only in a shape a colour can legally take.
-  const colorValues: Record<string, string> = {};
-  for (const s of config.colorSlots) {
-    if (!s.exposed) continue;
-    const v = body.colorValues?.[s.nodeId];
-    colorValues[s.nodeId] = /^#[0-9a-fA-F]{6}$/.test(v ?? "") ? (v as string) : s.hex;
-  }
-
+  // Colour is not customer-editable in v2 — the artwork's own fills stand.
   return renderTemplateV2(
     preparedSvg,
     {
@@ -93,11 +87,12 @@ async function renderV2(body: ExportBody): Promise<Buffer> {
         fill: f.fill,
       })),
       textValues,
-      colorValues,
+      colorValues: {},
     },
     config.canvasWidth,
     config.canvasHeight,
-    config.requiredFonts
+    config.requiredFonts,
+    config.customFonts
   );
 }
 

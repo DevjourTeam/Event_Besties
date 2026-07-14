@@ -72,6 +72,24 @@ export function uploadSVG(buffer: Buffer, publicId: string): Promise<UploadResul
   });
 }
 
+/**
+ * A webfont for a template whose artwork uses a face Google doesn't host.
+ * Raw resource: Cloudinary must serve the bytes untouched, and it sends
+ * Access-Control-Allow-Origin: *, which a cross-origin @font-face requires.
+ */
+export function uploadFont(
+  buffer: Buffer,
+  publicId: string,
+  ext: string
+): Promise<UploadResult> {
+  return uploadStream(buffer, {
+    resource_type: "raw",
+    folder: "fonts",
+    public_id: `${publicId}.${ext}`,
+    overwrite: true,
+  });
+}
+
 export function uploadPNG(
   buffer: Buffer,
   folder: string,

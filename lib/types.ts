@@ -49,6 +49,23 @@ export type TemplateColorSlot = {
   count: number;
 };
 
+/**
+ * A font the admin uploaded because the artwork uses a face Google doesn't host.
+ * Served from Cloudinary and injected as an @font-face wherever the design is
+ * drawn — the customer editor, the builder preview, and the print renderer — so
+ * a licensed script face renders as authored instead of falling back.
+ *
+ * `family` must be exactly the name used in the text field's `fontFamily`, or
+ * the @font-face won't match. It is read out of the font file itself at upload,
+ * not typed, so the two cannot disagree.
+ */
+export type CustomFont = {
+  family: string;
+  url: string;
+  /** CSS src format(): "woff2" | "woff" | "truetype" | "opentype". */
+  format: string;
+};
+
 export type TemplateConfig = {
   type: "template";
   templateId: string;
@@ -85,7 +102,15 @@ export type TemplateConfig = {
    */
   sourceSvgUrl?: string;
   textFields?: TemplateTextField[];
+  /**
+   * Colour swatches. Extraction still runs and the data-cs markers are still
+   * written, but the builder does not expose them: templates are text-only for
+   * now, so this ships as []. Turning colour back on is a UI change, not a
+   * format change — existing templates would not need rebuilding.
+   */
   colorSlots?: TemplateColorSlot[];
+  /** Uploaded faces, for artwork whose type isn't on Google Fonts. */
+  customFonts?: CustomFont[];
 };
 
 /** True when this template was built by the v2 (auto-extract) builder. */

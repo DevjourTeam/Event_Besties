@@ -1,69 +1,104 @@
 "use client";
 
-import { useId } from "react";
-import type { TemplateTextField, TemplateColorSlot } from "@/lib/types";
+import { useId, useRef, useState } from "react";
+import type { TemplateTextField, CustomFont } from "@/lib/types";
 import { isGoogleFont } from "@/lib/google-fonts";
+import { isCustomFont } from "@/lib/custom-fonts";
 import googleFontsList from "@/lib/google-fonts-list.json";
+import { Spinner } from "@/components/Spinner";
 
 /**
- * The v2 builder surface. Replaces PermissionEditor for auto-extracted
- * templates.
+ * The v2 builder surface. Text only — colour swatches are extracted but not
+ * exposed.
  *
- * Two things it does that the old permission list could not:
+ * Nothing here came from a layer name: the fields are whatever <text> elements
+ * the artwork contains. The admin's only real job is fonts, because the editor
+ * can draw a face only if it can fetch it. Two ways to satisfy that:
  *
- *  1. Nothing here came from a layer name. Text fields are whatever <text>
- *     elements the artwork contains; colours are grouped by fill value. The
- *     admin never has to prepare the SVG a particular way.
+ *   - map the field to a Google family, or
+ *   - upload the original font file, which we host and inject as an @font-face
+ *     under the exact name the SVG already uses — so the artwork renders as
+ *     drawn, with no remapping at all.
  *
- *  2. It refuses to let an unrenderable font through. The customer editor can
- *     only draw Google Fonts, so every field must be mapped to one before the
- *     product can be created — the failure surfaces here, at upload, instead of
- *     silently at checkout.
+ * Until every field resolves one way or the other, publish stays blocked. The
+ * failure belongs here, at upload, not silently at checkout.
  */
 
 const FONT_LIST = googleFontsList as string[];
 
 type Props = {
   textFields: TemplateTextField[];
-  colorSlots: TemplateColorSlot[];
+  customFonts: CustomFont[];
+  /** Detected in the SVG but not on Google — candidates for upload. */
+  unhostedFonts: string[];
   onTextChange: (next: TemplateTextField[]) => void;
-  onColorChange: (next: TemplateColorSlot[]) => void;
+  onUploadFont: (file: File, family: string) => Promise<string | null>;
 };
 
-/** Fields still missing a Google font. Publish is blocked while this is non-empty. */
-export function unmappedFonts(fields: TemplateTextField[]): TemplateTextField[] {
-  return fields.filter((f) => f.editable && !isGoogleFont(f.fontFamily));
+/** A field is satisfied by a Google family or by an uploaded face. */
+export function fontResolved(f: TemplateTextField, customFonts: CustomFont[]): boolean {
+  return isGoogleFont(f.fontFamily) || isCustomFont(f.fontFamily, customFonts);
+}
+
+/** Fields still without a renderable font. Publish is blocked while non-empty. */
+export function unmappedFonts(
+  fields: TemplateTextField[],
+  customFonts: CustomFont[]
+): TemplateTextField[] {
+  return fields.filter((f) => f.editable && !fontResolved(f, customFonts));
 }
 
 export function TemplateFieldEditor({
   textFields,
-  colorSlots,
+  customFonts,
+  unhostedFonts,
   onTextChange,
-  onColorChange,
+  onUploadFont,
 }: Props) {
   const listId = useId();
 
-  const patchText = (i: number, patch: Partial<TemplateTextField>) => {
+  const patch = (i: number, p: Partial<TemplateTextField>) => {
     const next = [...textFields];
-    next[i] = { ...next[i], ...patch };
+    next[i] = { ...next[i], ...p };
     onTextChange(next);
-  };
-
-  const patchColor = (i: number, patch: Partial<TemplateColorSlot>) => {
-    const next = [...colorSlots];
-    next[i] = { ...next[i], ...patch };
-    onColorChange(next);
   };
 
   return (
     <div className="space-y-5">
       <datalist id={listId}>
+        {customFonts.map((f) => (
+          <option key={`c-${f.family}`} value={f.family} />
+        ))}
         {FONT_LIST.map((f) => (
           <option key={f} value={f} />
         ))}
       </datalist>
 
-      {/* ---------------- text ---------------- */}
+      {/* ---- fonts the artwork needs but Google doesn't host ---- */}
+      {unhostedFonts.length > 0 && (
+        <section>
+          <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
+            Fonts not on Google
+          </div>
+          <div className="space-y-2">
+            {unhostedFonts.map((family) => (
+              <FontUploadRow
+                key={family}
+                family={family}
+                uploaded={isCustomFont(family, customFonts)}
+                onUpload={(file) => onUploadFont(file, family)}
+              />
+            ))}
+          </div>
+          <p className="text-[10px] text-text-muted mt-2 leading-relaxed">
+            Upload the font file to keep the artwork&rsquo;s original typeface, or
+            leave it and map each field to a Google font below. Uploading requires
+            a licence that permits webfont embedding.
+          </p>
+        </section>
+      )}
+
+      {/* ---- text fields ---- */}
       <section>
         <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
           Text fields · {textFields.length} found
@@ -71,9 +106,7 @@ export function TemplateFieldEditor({
 
         <div className="space-y-2">
           {textFields.map((f, i) => {
-            const mapped = isGoogleFont(f.fontFamily);
-            const originalIsGoogle = isGoogleFont(f.originalFont);
-
+            const ok = fontResolved(f, customFonts);
             return (
               <div
                 key={f.nodeId}
@@ -84,50 +117,55 @@ export function TemplateFieldEditor({
                     text
                   </span>
                   <span className="text-[11px] text-text-muted truncate">
-                    &ldquo;{f.value.slice(0, 30)}
-                    {f.value.length > 30 ? "…" : ""}&rdquo;
+                    &ldquo;{f.value.slice(0, 28)}
+                    {f.value.length > 28 ? "…" : ""}&rdquo;
                   </span>
                   <span className="ml-auto text-[10px] text-text-muted shrink-0">
                     {Math.round(f.fontSize)}px
                   </span>
                 </div>
 
-                <Field label="Label shown to customer">
+                <div>
+                  <div className="text-[10px] text-text-muted mb-1">
+                    Label shown to customer
+                  </div>
                   <input
                     type="text"
                     value={f.label}
-                    onChange={(e) => patchText(i, { label: e.target.value })}
+                    onChange={(e) => patch(i, { label: e.target.value })}
                     className="w-full h-8 px-2 rounded-md border border-card-border bg-form-surface text-[11px] focus:outline-none focus:ring-1 focus:ring-gold/50"
                   />
-                </Field>
+                </div>
 
-                <Field label="Font the editor will render">
+                <div>
+                  <div className="text-[10px] text-text-muted mb-1">
+                    Font the editor will render
+                  </div>
                   <input
                     type="text"
                     list={listId}
                     value={f.fontFamily}
-                    placeholder="Search Google Fonts…"
-                    onChange={(e) => patchText(i, { fontFamily: e.target.value })}
-                    className={`w-full h-8 px-2 rounded-md border bg-form-surface text-[11px] focus:outline-none focus:ring-1 ${
-                      mapped
-                        ? "border-[#c9e2cf] focus:ring-gold/50"
+                    placeholder="Google font, or an uploaded font…"
+                    onChange={(e) => patch(i, { fontFamily: e.target.value })}
+                    className={`w-full h-8 px-2 rounded-md border text-[11px] focus:outline-none focus:ring-1 ${
+                      ok
+                        ? "border-[#c9e2cf] bg-form-surface focus:ring-gold/50"
                         : "border-[#f1ddb3] bg-[#fdf3e1] focus:ring-[#a06b1c]/40"
                     }`}
                   />
-                </Field>
-
-                {!originalIsGoogle && f.originalFont && (
-                  <p className="text-[10px] text-[#a06b1c] leading-relaxed">
-                    Artwork uses <strong>{f.originalFont}</strong>, which isn&rsquo;t a
-                    Google Font — the editor cannot render it. Pick a replacement above.
-                  </p>
-                )}
+                  {!ok && f.originalFont && (
+                    <p className="text-[10px] text-[#a06b1c] leading-relaxed mt-1">
+                      Artwork uses <strong>{f.originalFont}</strong>. Upload that font
+                      above, or pick a Google font here.
+                    </p>
+                  )}
+                </div>
 
                 <label className="flex items-center gap-2 text-[11px] text-[#1b2333] pt-0.5">
                   <input
                     type="checkbox"
                     checked={f.editable}
-                    onChange={(e) => patchText(i, { editable: e.target.checked })}
+                    onChange={(e) => patch(i, { editable: e.target.checked })}
                   />
                   Customer can edit this text
                 </label>
@@ -136,72 +174,80 @@ export function TemplateFieldEditor({
           })}
         </div>
       </section>
-
-      {/* ---------------- colour ---------------- */}
-      <section>
-        <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
-          Colours · {colorSlots.length} found
-        </div>
-
-        <div className="space-y-2">
-          {colorSlots.map((c, i) => (
-            <div
-              key={c.nodeId}
-              className="bg-white border border-card-border rounded-lg px-3 py-2.5 space-y-2"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-5 h-5 rounded border border-card-border shrink-0"
-                  style={{ backgroundColor: c.hex }}
-                />
-                <code className="text-[11px] font-mono text-[#1b2333]">{c.hex}</code>
-                <span className="ml-auto text-[10px] text-text-muted">
-                  used {c.count}×
-                </span>
-              </div>
-
-              <label className="flex items-center gap-2 text-[11px] text-[#1b2333]">
-                <input
-                  type="checkbox"
-                  checked={c.exposed}
-                  onChange={(e) => patchColor(i, { exposed: e.target.checked })}
-                />
-                Customer can change this colour
-              </label>
-
-              {c.exposed && (
-                <input
-                  type="text"
-                  value={c.label}
-                  placeholder="Label, e.g. Strawberry"
-                  onChange={(e) => patchColor(i, { label: e.target.value })}
-                  className="w-full h-8 px-2 rounded-md border border-card-border bg-form-surface text-[11px] focus:outline-none focus:ring-1 focus:ring-gold/50"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <p className="text-[10px] text-text-muted mt-2 leading-relaxed">
-          Colours are shared, not per-shape. Exposing one lets the customer
-          recolour every element painted with it at once.
-        </p>
-      </section>
     </div>
   );
 }
 
-function Field({
-  label,
-  children,
+function FontUploadRow({
+  family,
+  uploaded,
+  onUpload,
 }: {
-  label: string;
-  children: React.ReactNode;
+  family: string;
+  uploaded: boolean;
+  onUpload: (file: File) => Promise<string | null>;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    const err = await onUpload(file);
+    setError(err);
+    setBusy(false);
+  };
+
   return (
-    <div>
-      <div className="text-[10px] text-text-muted mb-1">{label}</div>
-      {children}
+    <div
+      className={`border rounded-lg px-3 py-2.5 ${
+        uploaded
+          ? "bg-[#e8f4ea] border-[#c9e2cf]"
+          : "bg-[#fdf3e1] border-[#f1ddb3]"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+            uploaded ? "bg-[#2a7a3c]" : "bg-[#a06b1c]"
+          }`}
+        />
+        <span
+          className={`flex-1 truncate text-[12px] ${
+            uploaded ? "text-[#2a7a3c]" : "text-[#a06b1c]"
+          }`}
+        >
+          {family}
+        </span>
+        <span className="text-[9px] uppercase tracking-[0.06em] opacity-70 shrink-0">
+          {uploaded ? "hosted" : "not on google"}
+        </span>
+      </div>
+
+      {!uploaded && (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".woff2,.woff,.ttf,.otf"
+            className="hidden"
+            onChange={(e) => pick(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+            className="mt-2 w-full h-8 rounded-md border border-[#e0c98f] bg-white text-[11px] text-[#a06b1c] hover:bg-[#fffaf0] disabled:opacity-60 inline-flex items-center justify-center gap-1.5"
+          >
+            {busy && <Spinner size={12} />}
+            {busy ? "Uploading…" : "Upload font file (.woff2 .woff .ttf .otf)"}
+          </button>
+        </>
+      )}
+
+      {error && <p className="text-[10px] text-[#a83232] mt-1.5">{error}</p>}
     </div>
   );
 }

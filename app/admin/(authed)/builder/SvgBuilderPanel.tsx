@@ -14,22 +14,20 @@ import {
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 import { prepareSvg, composeSvg, type PreparedTemplate } from "@/lib/svg-template";
-import { googleFontsHrefFor } from "@/lib/google-fonts";
-import type {
-  TemplateConfig,
-  TemplateTextField,
-  TemplateColorSlot,
-} from "@/lib/types";
+import { googleFontsHrefFor, isGoogleFont } from "@/lib/google-fonts";
+import { fontFaceCss } from "@/lib/custom-fonts";
+import type { TemplateConfig, TemplateTextField, CustomFont } from "@/lib/types";
 import { CopyIcon } from "@/components/admin/Icons";
 
 /**
- * Template builder — v2.
+ * Template builder — v2. Text only.
  *
  * The admin uploads whatever Illustrator gave them. We read the <text> elements
- * and fill colours out of it directly, so there is nothing to name and no export
- * setting to get right. The one thing the artwork must have is live type: text
- * converted to outlines is paths, and no amount of parsing brings it back — that
- * case is reported as fatal rather than shipped as a template nobody can edit.
+ * out of it, so there is nothing to name and no export setting to get right.
+ * Two rules remain, and both are enforced here rather than discovered later:
+ *
+ *   - the type must be live, not outlined (outlines are paths; nothing recovers them)
+ *   - every field needs a font we can actually fetch — Google, or one uploaded here
  */
 export function SvgBuilderPanel() {
   const toast = useToast();
@@ -38,7 +36,7 @@ export function SvgBuilderPanel() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [prepared, setPrepared] = useState<PreparedTemplate | null>(null);
   const [textFields, setTextFields] = useState<TemplateTextField[]>([]);
-  const [colorSlots, setColorSlots] = useState<TemplateColorSlot[]>([]);
+  const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -53,34 +51,84 @@ export function SvgBuilderPanel() {
     const result = prepareSvg(svgText);
     setFileName(fileName);
     setPrepared(result);
-    setTextFields(result.textFields);
-    setColorSlots(result.colorSlots);
+    setCustomFonts([]);
+    // Where the artwork already uses a Google font, there is nothing to decide —
+    // prefill it so the admin only has to act on the fonts that actually need it.
+    setTextFields(
+      result.textFields.map((f) => ({
+        ...f,
+        fontFamily: isGoogleFont(f.originalFont) ? f.originalFont : "",
+      }))
+    );
   };
 
-  const missing = useMemo(() => unmappedFonts(textFields), [textFields]);
+  /** Faces the artwork asks for that Google can't serve — the upload candidates. */
+  const unhostedFonts = useMemo(
+    () =>
+      [...new Set(prepared?.detectedFonts ?? [])].filter(
+        (f) => f && !isGoogleFont(f)
+      ),
+    [prepared]
+  );
+
+  const missing = useMemo(
+    () => unmappedFonts(textFields, customFonts),
+    [textFields, customFonts]
+  );
   const ready = !!prepared && !prepared.fatal && missing.length === 0;
 
-  /* The preview must tell the truth, which means rendering in the fonts the
-   * customer will actually get — not the ones Illustrator used. Load exactly the
-   * families the admin has mapped so far, and nothing else. */
-  const mappedFonts = useMemo(
-    () => [...new Set(textFields.map((f) => f.fontFamily).filter(Boolean))],
+  const googleFamilies = useMemo(
+    () => [...new Set(textFields.map((f) => f.fontFamily).filter(isGoogleFont))],
     [textFields]
   );
 
+  /* The preview has to tell the truth, so load exactly what the customer will
+   * get: Google families via <link>, uploaded faces via @font-face. */
   useEffect(() => {
-    const href = googleFontsHrefFor(mappedFonts);
+    const href = googleFontsHrefFor(googleFamilies);
     if (!href) return;
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = href;
     document.head.appendChild(link);
     return () => link.remove();
-  }, [mappedFonts]);
+  }, [googleFamilies]);
 
-  /* Live preview: the same composeSvg the customer editor and the print
-   * renderer call, so what the admin sees here is what everyone downstream
-   * gets. */
+  useEffect(() => {
+    const css = fontFaceCss(customFonts);
+    if (!css) return;
+    const style = document.createElement("style");
+    style.textContent = css;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, [customFonts]);
+
+  const uploadFont = async (file: File, family: string): Promise<string | null> => {
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("family", family);
+      const res = await fetch("/api/admin/upload-font", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) return json.error ?? "Upload failed";
+
+      const font: CustomFont = json;
+      setCustomFonts((prev) => [...prev.filter((f) => f.family !== family), font]);
+      // The whole point of hosting the original face is that the artwork renders
+      // as drawn — so bind it straight to every field that asked for it.
+      setTextFields((prev) =>
+        prev.map((f) =>
+          f.originalFont === family ? { ...f, fontFamily: family } : f
+        )
+      );
+      toast.show(`${family} hosted`);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : "Upload failed";
+    }
+  };
+
+  /* Same composeSvg the customer editor and the print renderer call. */
   const previewSvg = useMemo(() => {
     if (!prepared?.preparedSvg) return "";
     try {
@@ -92,14 +140,12 @@ export function SvgBuilderPanel() {
           fill: f.fill,
         })),
         textValues: Object.fromEntries(textFields.map((f) => [f.nodeId, f.value])),
-        colorValues: Object.fromEntries(
-          colorSlots.filter((c) => c.exposed).map((c) => [c.nodeId, c.hex])
-        ),
+        colorValues: {},
       });
     } catch {
       return prepared.preparedSvg;
     }
-  }, [prepared, textFields, colorSlots]);
+  }, [prepared, textFields]);
 
   const buildConfig = (
     productName: string,
@@ -119,8 +165,11 @@ export function SvgBuilderPanel() {
       canvasWidth: prepared.width,
       canvasHeight: prepared.height,
       textFields,
-      colorSlots,
-      requiredFonts: mappedFonts,
+      colorSlots: [],
+      customFonts,
+      // Only the Google ones belong here: uploaded faces come from our own CDN
+      // via @font-face, not from a fonts.googleapis.com <link>.
+      requiredFonts: googleFamilies,
       price: priceLabel,
       status: "published",
       createdAt: new Date().toISOString().slice(0, 10),
@@ -131,7 +180,7 @@ export function SvgBuilderPanel() {
     const c = buildConfig("Untitled Template", "£0", "");
     return c ? JSON.stringify(c, null, 2) : "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prepared, textFields, colorSlots, mappedFonts]);
+  }, [prepared, textFields, customFonts, googleFamilies]);
 
   const copyJson = async () => {
     if (!configJson) return;
@@ -148,7 +197,7 @@ export function SvgBuilderPanel() {
     if (prepared.fatal) return toast.show(prepared.fatal);
     if (missing.length) {
       return toast.show(
-        `Map a Google Font for: ${missing.map((f) => f.label).join(", ")}`
+        `Still needs a font: ${missing.map((f) => f.label).join(", ")}`
       );
     }
     setModalOpen(true);
@@ -163,9 +212,9 @@ export function SvgBuilderPanel() {
     if (!prepared) return { error: "No SVG loaded" };
     setPublishing(true);
     try {
-      // Upload the PREPARED svg — the one carrying data-tf / data-cs markers.
-      // This is the pristine source the print renderer composes from, so it has
-      // to be what we store, not the raw file the admin dropped in.
+      // Upload the PREPARED svg — the one carrying the data-tf markers. This is
+      // the pristine source the print renderer composes from, so it has to be
+      // what we store, not the raw file the admin dropped in.
       const fd = new FormData();
       fd.append(
         "file",
@@ -173,10 +222,7 @@ export function SvgBuilderPanel() {
           type: "image/svg+xml",
         })
       );
-      const upRes = await fetch("/api/admin/upload-svg", {
-        method: "POST",
-        body: fd,
-      });
+      const upRes = await fetch("/api/admin/upload-svg", { method: "POST", body: fd });
       const upJson = await upRes.json();
       if (!upRes.ok) return { error: upJson.error ?? "SVG upload failed" };
 
@@ -253,16 +299,17 @@ export function SvgBuilderPanel() {
             </div>
             <Stat label="Canvas" value={`${prepared.width} × ${prepared.height} px`} />
             <Stat label="Text fields" value={`${prepared.textFields.length}`} />
-            <Stat label="Colours" value={`${prepared.colorSlots.length}`} />
+            <Stat label="File size" value={`${prepared.fileSizeKB} KB`} />
           </div>
         )}
 
         {prepared && !prepared.fatal && (
           <TemplateFieldEditor
             textFields={textFields}
-            colorSlots={colorSlots}
+            customFonts={customFonts}
+            unhostedFonts={unhostedFonts}
             onTextChange={setTextFields}
-            onColorChange={setColorSlots}
+            onUploadFont={uploadFont}
           />
         )}
 
@@ -270,9 +317,9 @@ export function SvgBuilderPanel() {
           <div className="border-t border-card-border pt-5 space-y-3">
             {missing.length > 0 && (
               <p className="text-[11px] text-[#a06b1c] bg-[#fdf3e1] border border-[#f1ddb3] rounded-md px-2.5 py-2 leading-relaxed">
-                Pick a Google Font for{" "}
-                <strong>{missing.map((f) => f.label).join(", ")}</strong> before
-                creating the product — the editor can&rsquo;t render anything else.
+                <strong>{missing.map((f) => f.label).join(", ")}</strong> still needs
+                a font the editor can fetch — upload the original, or pick a Google
+                one.
               </p>
             )}
             <button

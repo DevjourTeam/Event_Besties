@@ -14,6 +14,8 @@
 
 import type { Browser } from "puppeteer-core";
 import { composeSvg, type ComposeSpec } from "./svg-template";
+import { fontFaceCss } from "./custom-fonts";
+import type { CustomFont } from "./types";
 
 async function launchBrowser(): Promise<Browser> {
   const isServerless =
@@ -85,7 +87,8 @@ export async function renderTemplateV2(
   spec: ComposeSpec,
   width: number,
   height: number,
-  fonts?: string[]
+  fonts?: string[],
+  customFonts?: CustomFont[]
 ): Promise<Buffer> {
   const browser = await launchBrowser();
   try {
@@ -96,9 +99,12 @@ export async function renderTemplateV2(
       deviceScaleFactor: clampScaleFactor(width, height),
     });
 
+    // Both font sources, or the print quietly comes out in a fallback face:
+    // Google families via <link>, admin-uploaded faces via @font-face.
     const html = `<!doctype html><html><head><meta charset="utf-8">${googleFontsLinkTag(
       fonts
     )}<style>
+${fontFaceCss(customFonts)}
 html,body{margin:0;padding:0;background:#ffffff;}
 svg{display:block;width:${width}px;height:${height}px;}
 </style></head><body></body></html>`;
@@ -124,12 +130,29 @@ svg{display:block;width:${width}px;height:${height}px;}
       height
     );
 
-    // Without this Puppeteer can screenshot before the Google Font lands, which
-    // silently prints the fallback face.
-    if (fonts && fonts.length) {
-      await page.evaluate(() =>
-        (document as Document & { fonts: { ready: Promise<unknown> } }).fonts.ready
-      );
+    // Fonts must be forced, not merely awaited. A browser fetches a webfont
+    // lazily — only once layout proves something needs it — so document.fonts
+    // .ready can resolve while the face has not even begun downloading, and the
+    // screenshot lands on the fallback. Printing a customer's design in the
+    // wrong typeface is silent and unrecoverable, so ask for each family by name
+    // and only then wait.
+    const families = [
+      ...(fonts ?? []),
+      ...(customFonts ?? []).map((f) => f.family),
+    ];
+    if (families.length) {
+      await page.evaluate(async (list: string[]) => {
+        const d = document as Document & {
+          fonts: {
+            ready: Promise<unknown>;
+            load: (font: string) => Promise<unknown>;
+          };
+        };
+        await Promise.all(
+          list.map((f) => d.fonts.load(`400 64px '${f}'`).catch(() => undefined))
+        );
+        await d.fonts.ready;
+      }, families);
     }
 
     const shot = await page.screenshot({ type: "png", fullPage: false });

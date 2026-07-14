@@ -146,19 +146,26 @@ export type PreparedTemplate = {
   preparedSvg: string;
   width: number;
   height: number;
+  fileSizeKB: number;
   textFields: TemplateTextField[];
   colorSlots: TemplateColorSlot[];
-  /** Fonts Illustrator asked for. The builder makes the admin remap these. */
+  /**
+   * Font families the artwork asks for. The builder makes the admin resolve each
+   * one — to a Google family, or to a font file they upload.
+   */
   detectedFonts: string[];
   /** Set when the file cannot work as a template at all. */
   fatal?: string;
 };
 
 export function prepareSvg(svgText: string): PreparedTemplate {
+  const fileSizeKB = +(new Blob([svgText]).size / 1024).toFixed(1);
+
   const empty = (fatal: string): PreparedTemplate => ({
     preparedSvg: "",
     width: 0,
     height: 0,
+    fileSizeKB,
     textFields: [],
     colorSlots: [],
     detectedFonts: [],
@@ -285,6 +292,7 @@ export function prepareSvg(svgText: string): PreparedTemplate {
     preparedSvg,
     width: Math.round(width),
     height: Math.round(height),
+    fileSizeKB,
     textFields,
     colorSlots,
     detectedFonts: [...fontSet].sort(),
