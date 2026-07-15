@@ -50,7 +50,9 @@ type ExportBody = {
  * editable — so a customer editing the DOM in devtools changes their screen and
  * nothing else.
  */
-async function renderV2(body: ExportBody): Promise<Buffer> {
+async function renderV2(
+  body: ExportBody
+): Promise<{ rect: Buffer; arch: Buffer }> {
   if (!body.productId) throw new Error("Missing productId");
 
   const config = await getProductMetafield<TemplateConfig>(
@@ -132,12 +134,29 @@ export async function POST(req: Request) {
   }
 
   try {
-    let pngBuffer: Buffer;
+    // v2 template: TWO print files. The arch-cut shape is the physical product,
+    // so it is the print + the cart preview; the full rectangle rides along for
+    // fulfilment. Composed server-side from the stored template — svgString in
+    // the request is ignored (see renderV2).
     if (body.type === "template" && body.version === 2) {
-      // Composed server-side from the stored template. svgString is ignored
-      // here even if present — see renderV2.
-      pngBuffer = await renderV2(body);
-    } else if (body.type === "template") {
+      const { rect, arch } = await renderV2(body);
+      const stamp = `${body.templateId}_${Date.now()}`;
+      const [printUpload, previewUpload, rectUpload] = await Promise.all([
+        uploadPNG(arch, "print", stamp),
+        // Preview is a JPEG (no alpha), so use the rectangle — the arch's
+        // transparent corners would flatten to black in a JPG.
+        uploadJPEG(rect, "preview", stamp, { width: 800 }),
+        uploadPNG(rect, "print", `${stamp}_rect`),
+      ]);
+      return NextResponse.json({
+        printUrl: printUpload.secure_url,
+        previewUrl: previewUpload.secure_url,
+        rectUrl: rectUpload.secure_url,
+      });
+    }
+
+    let pngBuffer: Buffer;
+    if (body.type === "template") {
       if (!body.svgString) {
         return NextResponse.json({ error: "Missing svgString" }, { status: 400 });
       }

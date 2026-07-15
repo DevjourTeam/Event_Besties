@@ -16,6 +16,7 @@ import type { Browser, Page, HTTPRequest } from "puppeteer-core";
 import { composeSvg, type ComposeSpec } from "./svg-template";
 import { fitTextFields, type FitField } from "./svg-fit";
 import { fontFaceCss } from "./custom-fonts";
+import { applyArchClip } from "./arch-shape";
 import type { CustomFont } from "./types";
 
 // The ONLY external hosts a render page may talk to. Everything renders from a
@@ -123,7 +124,7 @@ export async function renderTemplateV2(
   height: number,
   fonts?: string[],
   customFonts?: CustomFont[]
-): Promise<Buffer> {
+): Promise<{ rect: Buffer; arch: Buffer }> {
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
@@ -212,8 +213,32 @@ svg{display:block;width:${width}px;height:${height}px;}
       }))
     );
 
-    const shot = await page.screenshot({ type: "png", fullPage: false });
-    return Buffer.from(shot);
+    // Image 1 — the full uncropped rectangle, white background (the "default").
+    const rect = Buffer.from(
+      await page.screenshot({ type: "png", fullPage: false })
+    );
+
+    // Image 2 — the arch-cut product shape. Clip the artwork to the arch and
+    // drop the page background, so everything outside the curve is transparent
+    // and production can cut the board to match. Same clip the customer saw on
+    // screen, so the two cannot disagree.
+    await page.evaluate((clipSrc: string) => {
+      const apply = new Function(`return (${clipSrc})`)() as (
+        svg: SVGSVGElement,
+        id: string
+      ) => void;
+      const el = document.querySelector("svg") as SVGSVGElement | null;
+      if (el) apply(el, "eb-arch-clip");
+      // Kill the white page background so the corners come out transparent.
+      document.documentElement.style.background = "transparent";
+      document.body.style.background = "transparent";
+    }, applyArchClip.toString());
+
+    const arch = Buffer.from(
+      await page.screenshot({ type: "png", fullPage: false, omitBackground: true })
+    );
+
+    return { rect, arch };
   } finally {
     await browser.close();
   }

@@ -9,9 +9,14 @@ import { googleFontsHrefFor } from "@/lib/google-fonts";
 import { fontFaceCss } from "@/lib/custom-fonts";
 import { composeSvg } from "@/lib/svg-template";
 import { fitTextFields, type TextAlign } from "@/lib/svg-fit";
+import { parseSizeCm } from "@/lib/arch-shape";
 import type { TemplateConfig, WithProductImage } from "@/lib/types";
 import { useCanvasZoom } from "@/hooks/useCanvasZoom";
 import { ZoomControls } from "./ZoomControls";
+import { TemplateStage } from "./TemplateStage";
+
+/** On-screen board height in px; the design's aspect sets the width. */
+const BOARD_H = 620;
 
 type V2Config = WithProductImage<
   TemplateConfig & { version: 2; sourceSvgUrl: string }
@@ -42,9 +47,15 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
   const zoomContainerRef = useRef<HTMLDivElement | null>(null);
   const zoomOuterRef = useRef<HTMLDivElement | null>(null);
   const zoomInnerRef = useRef<HTMLDivElement | null>(null);
+
+  // The board is drawn at the design's own aspect ratio. The whole stage (board
+  // + room + margins) is what the zoom scales, so zoom fits the room to the
+  // viewport rather than the raw print pixels.
+  const boardW = Math.round(BOARD_H * (config.canvasWidth / config.canvasHeight));
+  const STAGE_PAD = 52;
   const zoom = useCanvasZoom({
-    canvasWidth: config.canvasWidth,
-    canvasHeight: config.canvasHeight,
+    canvasWidth: boardW + STAGE_PAD * 2,
+    canvasHeight: BOARD_H + STAGE_PAD * 2,
     containerRef: zoomContainerRef,
     outerRef: zoomOuterRef,
     innerRef: zoomInnerRef,
@@ -60,6 +71,14 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
     () => config.variants?.find((v) => v.variantId === variantId),
     [config.variants, variantId]
   );
+
+  // Real-world size for the on-screen measurements. Templates store the cm only
+  // inside the variant label ("5ft (150 x 74cm)"), so read it from there —
+  // the chosen size, or the first if none is chosen yet.
+  const sizeCm = useMemo(() => {
+    const label = selectedSize?.label ?? config.variants?.[0]?.label;
+    return parseSizeCm(label, config.canvasWidth, config.canvasHeight);
+  }, [selectedSize, config.variants, config.canvasWidth, config.canvasHeight]);
   const shellConfig = useMemo(
     () =>
       selectedSize
@@ -141,10 +160,14 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
         textValues,
         colorValues: {},
       });
-      const svg = containerRef.current.querySelector("svg");
+      const svg = containerRef.current.querySelector("svg") as SVGSVGElement | null;
       if (svg) {
-        svg.setAttribute("width", String(config.canvasWidth));
-        svg.setAttribute("height", String(config.canvasHeight));
+        // Fill the board box; the viewBox keeps the artwork's own coordinates
+        // for the fit pass. The arch cut is done by the board div's CSS clip-path
+        // (zoom-safe pixel space), not here — see TemplateStage.
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
       }
 
       // Shrink anything the customer overflowed back inside the artboard. The
@@ -235,8 +258,11 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
 
       await handoffDesign({
         variantId,
+        // printUrl is the arch-cut file (the physical product shape); rectUrl is
+        // the full uncropped rectangle. Both go on the order for fulfilment.
         printUrl: data.printUrl,
         previewUrl: data.previewUrl,
+        rectUrl: data.rectUrl,
         templateId: config.templateId,
         designType: "template",
         customizationSummary: summary || undefined,
@@ -338,11 +364,15 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
         </div>
       ) : (
         <div ref={zoomOuterRef} className="shrink-0">
-          <div
-            ref={zoomInnerRef}
-            className="bg-white border border-card-border rounded-card shadow-md"
-          >
-            <div id={CANVAS_ID} ref={containerRef} className="w-full h-full [&>svg]:block" />
+          <div ref={zoomInnerRef}>
+            <TemplateStage
+              ref={containerRef}
+              boardW={boardW}
+              boardH={BOARD_H}
+              canvasId={CANVAS_ID}
+              widthCm={sizeCm?.widthCm}
+              heightCm={sizeCm?.heightCm}
+            />
           </div>
         </div>
       )}

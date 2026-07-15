@@ -22,6 +22,8 @@ export type DesignReadyPayload = {
   variantId: string;
   printUrl: string;
   previewUrl: string;
+  /** Full uncropped rectangle, alongside the arch-cut printUrl (v2 templates). */
+  rectUrl?: string;
   templateId: string;
   designType: "template" | "canvas";
   customizationSummary?: string;
@@ -62,6 +64,9 @@ export async function handoffDesign(payload: DesignReadyPayload): Promise<void> 
         // admins on the order — these are the fulfilment/internal fields.
         { key: "_Print file", value: payload.printUrl },
         { key: "_Preview", value: payload.previewUrl },
+        ...(payload.rectUrl
+          ? [{ key: "_Print file (full rectangle)", value: payload.rectUrl }]
+          : []),
         { key: "_template_id", value: payload.templateId },
         { key: "_design_type", value: payload.designType },
         // No customer-facing preview property: the shopper previews the design
