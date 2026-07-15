@@ -50,6 +50,9 @@ export type FitField = {
   align?: TextAlign;
 };
 
+/** A bounding box in the root SVG's user units. */
+type RootBox = { x: number; y: number; width: number; height: number };
+
 export function fitTextFields(
   rootSelector: string,
   preparedSvg: string,
@@ -125,9 +128,45 @@ export function fitTextFields(
     return { dx: b.x - a.x, dy: b.y - a.y };
   };
 
-  /* --- the artwork's own line spacing, per field ------------------------ */
-  // Read from the pristine SVG: composing may have added or dropped lines, so
-  // the authored leading is only recoverable from the original.
+  /** Union of two root-space boxes. */
+  const unionBox = (a: RootBox, b: RootBox): RootBox => {
+    const x = Math.min(a.x, b.x);
+    const y = Math.min(a.y, b.y);
+    return {
+      x,
+      y,
+      width: Math.max(a.x + a.width, b.x + b.width) - x,
+      height: Math.max(a.y + a.height, b.y + b.height) - y,
+    };
+  };
+
+  /**
+   * A field's parts from its data-tf marker. It is marked EITHER on a bare
+   * <text> (a whole single-run block) OR on the leaf tspans of one colour run —
+   * a block that mixes colours is split into a field per run (see prepareSvg), so
+   * each run sizes and moves on its own. `tspans` are the lines; `first` gives the
+   * shared CTM; `textEl` is set only for a bare block.
+   */
+  const resolve =
+    (scope: Element) =>
+    (nodeId: string) => {
+      const nodes = Array.from(
+        scope.querySelectorAll('[data-tf="' + nodeId + '"]')
+      ) as SVGGraphicsElement[];
+      if (!nodes.length) return null;
+      const first = nodes[0];
+      const isText = first.tagName.toLowerCase() === "text";
+      const tspans = (
+        isText
+          ? Array.from(first.querySelectorAll("tspan")).filter(
+              (t) => !t.querySelector("tspan") && (t.textContent || "").trim() !== ""
+            )
+          : nodes
+      ) as SVGGraphicsElement[];
+      return { first, tspans, textEl: isText ? first : null };
+    };
+
+  /* --- leading per field, read from the pristine SVG -------------------- */
   const leading: Record<string, number> = {};
   const holder = document.createElement("div");
   holder.setAttribute(
@@ -138,60 +177,55 @@ export function fitTextFields(
   document.body.appendChild(holder);
 
   const srcSvg = holder.querySelector("svg");
+  const srcResolve = srcSvg ? resolve(srcSvg) : null;
   for (const f of fields) {
     const base = f.fontSize || 16;
     let step = base * 1.2;
-    const el = srcSvg
-      ? (srcSvg.querySelector('[data-tf="' + f.nodeId + '"]') as Element | null)
-      : null;
-    if (el) {
-      // Leaf tspans only — the ones that hold a line. A grouping tspan (colour
-      // run) has no y of its own, so reading it would give bad leading.
-      const ts = Array.from(el.querySelectorAll("tspan")).filter(
-        (t) => !t.querySelector("tspan") && (t.textContent || "").trim() !== ""
-      );
-      if (ts.length > 1) {
-        const y0 = parseFloat(ts[0].getAttribute("y") || "0");
-        const y1 = parseFloat(ts[1].getAttribute("y") || "0");
-        if (y1 > y0) step = y1 - y0;
-      }
+    const r = srcResolve ? srcResolve(f.nodeId) : null;
+    if (r && r.tspans.length > 1) {
+      const y0 = parseFloat(r.tspans[0].getAttribute("y") || "0");
+      const y1 = parseFloat(r.tspans[1].getAttribute("y") || "0");
+      if (y1 > y0) step = y1 - y0;
     }
     leading[f.nodeId] = step / base; // as a multiple of the font size
   }
   holder.remove();
 
   /* --- shrink each field until it sits inside the artboard --------------- */
+  const liveResolve = resolve(svg);
   for (const f of fields) {
-    const el = svg.querySelector(
-      '[data-tf="' + f.nodeId + '"]'
-    ) as SVGGraphicsElement | null;
-    if (!el) continue;
+    const r = liveResolve(f.nodeId);
+    if (!r) continue;
+    const { first, tspans, textEl } = r;
 
-    // Leaf tspans only — the lines. Rewriting y on a grouping tspan (a colour
-    // run with no y of its own) would shift its children and break the layout.
-    const tspans = Array.from(el.querySelectorAll("tspan")).filter(
-      (t) => !t.querySelector("tspan") && (t.textContent || "").trim() !== ""
-    );
     const base = f.fontSize || 16;
     const ratio = leading[f.nodeId] || 1.2;
     const yFirst = tspans.length
       ? parseFloat(tspans[0].getAttribute("y") || "0")
-      : parseFloat(el.getAttribute("y") || "0");
+      : parseFloat((textEl || first).getAttribute("y") || "0");
+
+    // Every line the field owns; a bare single-line block is just the element.
+    const targets: SVGGraphicsElement[] = tspans.length ? tspans : [textEl || first];
+
+    /** The field's own box in root units — the union of its lines. */
+    const fieldBox = (): RootBox | null => {
+      if (!tspans.length) return rootBox(textEl || first);
+      let box: RootBox | null = null;
+      for (const t of tspans) {
+        const b = rootBox(t);
+        if (b) box = box ? unionBox(box, b) : b;
+      }
+      return box;
+    };
 
     /* --- alignment, if the customer asked for one ------------------------ */
-    // SVG's own text-anchor does the aligning; our job is only to give every
-    // line ONE shared anchor point. That single change covers both meanings of
-    // "align": the block moves to the chosen edge of the artboard, and the lines
-    // line up with each other, because they now share an x.
-    //
-    // The anchor is chosen in canvas space and converted back into the element's
-    // own units — Illustrator positions <text> with a transform, so an x written
-    // here is NOT a canvas x. Each line keeps its own y; only x moves.
+    // SVG's own text-anchor aligns; we just give every line ONE shared anchor
+    // point, chosen in canvas space and converted back into the element's own
+    // units (the <text> carries a transform, so a canvas x is not a local x).
     if (f.align) {
-      el.setAttribute(
-        "text-anchor",
-        f.align === "left" ? "start" : f.align === "right" ? "end" : "middle"
-      );
+      const anchor =
+        f.align === "left" ? "start" : f.align === "right" ? "end" : "middle";
+      targets.forEach((n) => n.setAttribute("text-anchor", anchor));
 
       const anchorX =
         f.align === "left"
@@ -200,40 +234,40 @@ export function fitTextFields(
           ? bounds.x + bounds.w
           : bounds.x + bounds.w / 2;
 
-      const m = toRoot(el);
+      const m = toRoot(first);
       if (m) {
         const inv = m.inverse();
-        const place = (node: Element) => {
+        targets.forEach((node) => {
           const lx = parseFloat(node.getAttribute("x") || "0");
           const ly = parseFloat(node.getAttribute("y") || "0");
           const here = new DOMPoint(lx, ly).matrixTransform(m);
           const back = new DOMPoint(anchorX, here.y).matrixTransform(inv);
           node.setAttribute("x", String(back.x));
-        };
-        if (tspans.length) tspans.forEach(place);
-        else place(el);
+        });
       }
     }
 
-    // Only y is rewritten here. Per-line x is left alone: unaligned, it is the
-    // designer's (Illustrator indents "   Soon" to sit right of "Hatching");
-    // aligned, it is the anchor we just set above.
+    // Size lives on the lines, not the shared <text>, so one run shrinking never
+    // drags another run in the same block. Only y is rewritten; x is the
+    // designer's (or the anchor set above).
     const apply = (size: number) => {
-      (el as unknown as HTMLElement).style.fontSize = size + "px";
-      const step = size * ratio;
-      tspans.forEach((t, i) => t.setAttribute("y", String(yFirst + step * i)));
+      if (tspans.length) {
+        tspans.forEach((t, i) => {
+          (t as unknown as HTMLElement).style.fontSize = size + "px";
+          t.setAttribute("y", String(yFirst + size * ratio * i));
+        });
+      } else {
+        ((textEl || first) as unknown as HTMLElement).style.fontSize = size + "px";
+      }
     };
 
     let size = base;
     apply(size);
 
-    // Text metrics are not perfectly linear in the font size, so converge rather
-    // than solve. A few passes is plenty and costs nothing.
+    // Text metrics are not perfectly linear in the font size, so converge.
     for (let i = 0; i < 8; i++) {
-      const b = rootBox(el);
+      const b = fieldBox();
       if (!b || !b.width || !b.height) break;
-
-      // How far it pokes out of the artboard, on the worst axis.
       const k = Math.min(bounds.w / b.width, bounds.h / b.height);
       if (k >= 0.999) break; // fits — and we never grow past the authored size
       size = Math.max(6, size * k * 0.99);
@@ -241,9 +275,7 @@ export function fitTextFields(
     }
 
     /* --- pull it back inside if it still hangs over an edge -------------- */
-    // Shrinking fixes the SIZE, but a long line centred near the edge can still
-    // straddle it; nudge the block back in without moving it otherwise.
-    const b = rootBox(el);
+    const b = fieldBox();
     if (!b) continue;
 
     let dx = 0;
@@ -257,15 +289,10 @@ export function fitTextFields(
 
     if (!dx && !dy) continue;
 
-    const d = toLocalDelta(el, dx, dy);
-    if (tspans.length) {
-      tspans.forEach((t) => {
-        t.setAttribute("x", String(parseFloat(t.getAttribute("x") || "0") + d.dx));
-        t.setAttribute("y", String(parseFloat(t.getAttribute("y") || "0") + d.dy));
-      });
-    } else {
-      el.setAttribute("x", String(parseFloat(el.getAttribute("x") || "0") + d.dx));
-      el.setAttribute("y", String(parseFloat(el.getAttribute("y") || "0") + d.dy));
-    }
+    const d = toLocalDelta(first, dx, dy);
+    targets.forEach((n) => {
+      n.setAttribute("x", String(parseFloat(n.getAttribute("x") || "0") + d.dx));
+      n.setAttribute("y", String(parseFloat(n.getAttribute("y") || "0") + d.dy));
+    });
   }
 }

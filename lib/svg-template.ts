@@ -150,6 +150,23 @@ function leafLines(el: Element): Element[] {
   );
 }
 
+/**
+ * The fill a line actually paints in. SVG fill inherits, and Illustrator hangs
+ * the colour on a GROUPING tspan (or the <text>) while the leaf that holds the
+ * words carries none — so we walk up from the leaf to the <text> and take the
+ * first fill that is set. This is what tells the greeting apart from the name.
+ */
+function inheritedFill(leaf: Element, textEl: Element, css: CssMap): string | null {
+  let node: Element | null = leaf;
+  while (node) {
+    const f = effective(node, "fill", css);
+    if (f) return f;
+    if (node === textEl) break;
+    node = node.parentElement;
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ *
  * prepare — the whole upload-time story
  * ------------------------------------------------------------------ */
@@ -233,48 +250,66 @@ export function prepareSvg(svgText: string): PreparedTemplate {
   const textFields: TemplateTextField[] = [];
   const fontSet = new Set<string>();
 
-  doc.querySelectorAll("text").forEach((el, i) => {
-    const nodeId = `tf${i}`;
-    el.setAttribute("data-tf", nodeId);
-
+  let tfCount = 0;
+  doc.querySelectorAll("text").forEach((el) => {
     const family = firstFamily(effective(el, "font-family", css));
-    // Illustrator often sets the size on the inner tspan rather than the <text>.
-    const inner = el.querySelector("tspan");
-    const size =
-      toPx(effective(el, "font-size", css)) ||
-      (inner ? toPx(effective(inner, "font-size", css)) : 0) ||
-      16;
-    const fillRaw =
-      effective(el, "fill", css) ??
-      (inner ? effective(inner, "fill", css) : null) ??
-      "#000000";
-
     if (family) fontSet.add(family);
+    const textSize = toPx(effective(el, "font-size", css));
 
-    // A line of text lives in a LEAF tspan (one with no child tspan). Illustrator
-    // nests tspans when runs differ in colour — "Happy 4th"/"Birthday" white, the
-    // name yellow — so grabbing every tspan would duplicate each line (outer +
-    // inner) and let compose overwrite a grouping tspan, deleting the positioned
-    // children under it and collapsing all lines onto one point. Whitespace-only
-    // leaves are Illustrator spacing artefacts, so they are not lines.
-    const lineEls = leafLines(el);
-    const value = lineEls.length
-      ? lineEls.map((t) => (t.textContent ?? "").trim()).join("\n")
-      : (el.textContent ?? "").replace(/\s+/g, " ").trim();
+    // A line of text lives in a LEAF tspan (leafLines): grouping tspans just wrap
+    // colour runs, and writing into one would delete its positioned children.
+    const leaves = leafLines(el);
 
-    textFields.push({
-      nodeId,
-      label: value.split("\n")[0].slice(0, 28) || `Text ${i + 1}`,
-      editable: true,
-      value,
-      originalFont: family,
-      // Left empty on purpose: the builder refuses to publish until the admin
-      // maps this to a real Google family, so a template can never ship with a
-      // font the customer editor is unable to render.
-      fontFamily: "",
-      fontSize: size,
-      fill: toHex(fillRaw) ?? "#000000",
-    });
+    // Bare <text> with no tspans — one field, marker on the element itself.
+    if (leaves.length === 0) {
+      const nodeId = `tf${tfCount++}`;
+      el.setAttribute("data-tf", nodeId);
+      const value = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+      const fillRaw = effective(el, "fill", css) ?? "#000000";
+      textFields.push({
+        nodeId,
+        label: value.slice(0, 28) || `Text ${tfCount}`,
+        editable: true,
+        value,
+        originalFont: family,
+        fontFamily: "",
+        fontSize: textSize || 16,
+        fill: toHex(fillRaw) ?? "#000000",
+      });
+      return;
+    }
+
+    // Split the block into one field per CONTIGUOUS run of same-colour lines.
+    // A greeting in white and a name in yellow become two independent fields —
+    // separate boxes, locks, fonts and fitting — without the designer having to
+    // author two <text> objects. A single-colour block is one run, so it stays a
+    // single field exactly as before. The marker goes on the leaves of the run.
+    const runs: { fill: string; leaves: Element[] }[] = [];
+    for (const leaf of leaves) {
+      const fill = toHex(inheritedFill(leaf, el, css) ?? "#000000") ?? "#000000";
+      const last = runs[runs.length - 1];
+      if (last && last.fill === fill) last.leaves.push(leaf);
+      else runs.push({ fill, leaves: [leaf] });
+    }
+
+    for (const run of runs) {
+      const nodeId = `tf${tfCount++}`;
+      for (const leaf of run.leaves) leaf.setAttribute("data-tf", nodeId);
+      const leafSize = toPx(effective(run.leaves[0], "font-size", css));
+      const value = run.leaves.map((t) => (t.textContent ?? "").trim()).join("\n");
+      textFields.push({
+        nodeId,
+        label: value.split("\n")[0].slice(0, 28) || `Text ${tfCount}`,
+        editable: true,
+        value,
+        originalFont: family,
+        // Left empty on purpose: the builder blocks publish until this maps to a
+        // font the customer editor can fetch (Google, or an uploaded face).
+        fontFamily: "",
+        fontSize: leafSize || textSize || 16,
+        fill: run.fill,
+      });
+    }
   });
 
   /* --- colour slots: group by fill value, not by element -------------- */
@@ -361,71 +396,67 @@ export function composeSvg(svgText: string, spec: ComposeSpec): string {
   const root = doc.documentElement;
 
   for (const field of spec.textFields) {
-    const el = root.querySelector(`[data-tf="${field.nodeId}"]`);
-    if (!el) continue;
+    // A field is marked either on a bare <text> element, or on the LEAF tspans of
+    // one colour run (see prepareSvg). querySelectorAll returns exactly those.
+    const nodes = Array.from(root.querySelectorAll(`[data-tf="${field.nodeId}"]`));
+    if (!nodes.length) continue;
 
-    // font-family is the ONLY thing we impose, because the admin may have
-    // remapped the face or uploaded it and the artwork's own name may not
-    // resolve. Everything else — fill, stroke, stroke-width, paint-order — is
-    // the designer's work and must survive untouched. Colour is not customer-
-    // editable in v2, so there is nothing here to override.
-    //
-    // Inline style, not an attribute: it outranks both the presentation
-    // attribute and any CSS class, so it lands on every Illustrator export mode
-    // without disturbing the original declarations.
+    // font-family is the ONLY thing we impose, because the admin may have remapped
+    // the face or uploaded it and the artwork's own name may not resolve.
+    // Everything else — fill, stroke, stroke-width, paint-order — is the designer's
+    // work and survives untouched. Inline style, so it outranks class + attribute.
     if (field.fontFamily) {
-      el.setAttribute(
-        "style",
-        `${el.getAttribute("style") ?? ""};font-family:'${field.fontFamily}'`.replace(
-          /^;/,
-          ""
-        )
-      );
+      for (const n of nodes) {
+        n.setAttribute(
+          "style",
+          `${n.getAttribute("style") ?? ""};font-family:'${field.fontFamily}'`.replace(
+            /^;/,
+            ""
+          )
+        );
+      }
     }
 
     const value = spec.textValues[field.nodeId];
     if (value === undefined) continue;
-
-    // Only LEAF tspans hold a line (see leafLines). Illustrator wraps colour runs
-    // in grouping tspans; writing into one of those would delete the positioned
-    // child under it and stack every line on 0,0. Inlined here — this function is
-    // shipped into the print renderer by source, so it cannot import.
-    const tspans = Array.from(el.querySelectorAll("tspan")).filter(
-      (t) => !t.querySelector("tspan") && (t.textContent ?? "").trim() !== ""
-    );
     const lines = value.split("\n");
 
-    // Artwork whose <text> holds a bare string, with no tspans. A single line can
-    // stay as text content, but the customer pressing Enter has to produce real
-    // lines — so build tspans rather than flattening the breaks into spaces.
-    if (tspans.length === 0) {
+    // Bare <text>, no tspans. A single line stays as text content; multiple lines
+    // become tspans so pressing Enter produces real lines, not spaces.
+    const bare = nodes[0];
+    if (
+      nodes.length === 1 &&
+      bare.tagName.toLowerCase() === "text" &&
+      !bare.querySelector("tspan")
+    ) {
       if (lines.length === 1) {
-        el.textContent = lines[0];
+        bare.textContent = lines[0];
         continue;
       }
-      const x = el.getAttribute("x") ?? "0";
-      const y0 = parseFloat(el.getAttribute("y") ?? "0");
+      const x = bare.getAttribute("x") ?? "0";
+      const y0 = parseFloat(bare.getAttribute("y") ?? "0");
       const step = field.fontSize * 1.2;
 
-      while (el.firstChild) el.removeChild(el.firstChild);
+      while (bare.firstChild) bare.removeChild(bare.firstChild);
       lines.forEach((line, i) => {
         const t = doc.createElementNS("http://www.w3.org/2000/svg", "tspan");
         t.setAttribute("x", x);
         t.setAttribute("y", String(y0 + step * i));
         t.textContent = line;
-        el.appendChild(t);
+        bare.appendChild(t);
       });
       continue;
     }
+
+    // Otherwise the nodes ARE the run's leaf tspans.
+    const tspans = nodes;
 
     // Reuse the artwork's own leaf tspans. Each carries the designer's per-line
     // work — stroke, per-line fill, x/y — and rebuilding would drop all of it. So
     // swap only text into the leaf that already exists (preserving colour and
     // position exactly), clone the last leaf beside itself to grow, and blank the
     // surplus to shrink. Never write into a node we did not put text in before.
-    const y0 = parseFloat(
-      tspans[0].getAttribute("y") ?? el.getAttribute("y") ?? "0"
-    );
+    const y0 = parseFloat(tspans[0].getAttribute("y") ?? "0");
     const step =
       tspans.length > 1
         ? parseFloat(tspans[1].getAttribute("y") ?? "0") - y0
