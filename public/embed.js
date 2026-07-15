@@ -151,9 +151,23 @@
         if (!preview) continue;
         var img = row.querySelector("img");
         if (img && img.getAttribute("src") !== preview) {
+          // The product photo is landscape; the design is a tall portrait, so it
+          // would overflow the theme's thumbnail box. Pin the swapped image into
+          // the exact footprint the product image had and letterbox it with
+          // object-fit: contain, so the whole design shows and nothing overflows.
+          var rect = img.getBoundingClientRect();
+          var box = Math.round(Math.min(rect.width, rect.height)) || 90;
           img.setAttribute("src", preview);
           img.setAttribute("srcset", "");
           img.removeAttribute("data-src");
+          img.removeAttribute("width");
+          img.removeAttribute("height");
+          img.style.setProperty("width", box + "px", "important");
+          img.style.setProperty("height", box + "px", "important");
+          img.style.setProperty("object-fit", "contain", "important");
+          img.style.setProperty("aspect-ratio", "auto", "important");
+          img.style.setProperty("max-width", "none", "important");
+          img.style.setProperty("background", "#f4f2ee", "important");
         }
       }
     }
