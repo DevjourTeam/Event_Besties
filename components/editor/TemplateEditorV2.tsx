@@ -13,10 +13,10 @@ import { parseSizeCm } from "@/lib/arch-shape";
 import type { TemplateConfig, WithProductImage } from "@/lib/types";
 import { useCanvasZoom } from "@/hooks/useCanvasZoom";
 import { ZoomControls } from "./ZoomControls";
-import { TemplateStage } from "./TemplateStage";
+import { TemplateStage, stageSize } from "./TemplateStage";
 
 /** On-screen board height in px; the design's aspect sets the width. */
-const BOARD_H = 620;
+const BOARD_H = 560;
 
 type V2Config = WithProductImage<
   TemplateConfig & { version: 2; sourceSvgUrl: string }
@@ -48,14 +48,14 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
   const zoomOuterRef = useRef<HTMLDivElement | null>(null);
   const zoomInnerRef = useRef<HTMLDivElement | null>(null);
 
-  // The board is drawn at the design's own aspect ratio. The whole stage (board
-  // + room + margins) is what the zoom scales, so zoom fits the room to the
-  // viewport rather than the raw print pixels.
+  // The board is drawn at the design's own aspect ratio; the stage is the whole
+  // room around it. Zoom fits the ROOM to the viewport, so the same dimensions
+  // drive both the zoom and the stage — no drift, and the room never overflows.
   const boardW = Math.round(BOARD_H * (config.canvasWidth / config.canvasHeight));
-  const STAGE_PAD = 52;
+  const { roomW, roomH } = stageSize(boardW, BOARD_H);
   const zoom = useCanvasZoom({
-    canvasWidth: boardW + STAGE_PAD * 2,
-    canvasHeight: BOARD_H + STAGE_PAD * 2,
+    canvasWidth: roomW,
+    canvasHeight: roomH,
     containerRef: zoomContainerRef,
     outerRef: zoomOuterRef,
     innerRef: zoomInnerRef,
@@ -162,12 +162,14 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
       });
       const svg = containerRef.current.querySelector("svg") as SVGSVGElement | null;
       if (svg) {
-        // Fill the board box; the viewBox keeps the artwork's own coordinates
-        // for the fit pass. The arch cut is done by the board div's CSS clip-path
-        // (zoom-safe pixel space), not here — see TemplateStage.
-        svg.setAttribute("width", "100%");
-        svg.setAttribute("height", "100%");
+        // Fill the board box. Set sizing via inline STYLE, not attributes, so it
+        // beats any stylesheet rule targeting `.ps-tpl-canvas svg`. The viewBox
+        // keeps the artwork's own coordinates for the fit pass; the arch cut is
+        // the board div's CSS clip-path (zoom-safe), not here — see TemplateStage.
         svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        svg.style.display = "block";
+        svg.style.width = "100%";
+        svg.style.height = "100%";
       }
 
       // Shrink anything the customer overflowed back inside the artboard. The

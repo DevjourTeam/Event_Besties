@@ -6,27 +6,31 @@ import { archPath } from "@/lib/arch-shape";
 /**
  * The template editor's stage — the design shown as a physical arch board
  * standing in a room, with its real dimensions called out. Mirrors the custom
- * canvas editor's CanvasStage so a template and a canvas look like the same
- * product; it just wraps the composed design SVG instead of a Fabric canvas.
+ * canvas editor so a template and a canvas read as the same product; it just
+ * wraps the composed design SVG instead of a Fabric canvas.
  *
  * The room and the measurements are CONTEXT ONLY. They are DOM here and never
- * reach either exported image — the print is rendered separately from the
+ * reach either exported image — the print is rendered separately, from the
  * artwork alone (see renderTemplateV2).
  *
- * Layout: a fixed-size host (board + margin) that the editor's zoom scales as a
- * whole. The backdrop is wider than the host and clipped by its overflow, and
- * stands the board on the floor line, exactly as CanvasBackdrop does.
+ * The whole stage is a fixed-size box (the full room) that the editor's zoom
+ * scales to the viewport. The board stands on the room's floor line, centred,
+ * with room to each side — the same framing the reference mockup shows.
  */
 
-const WORK_PAD = 52; // room around the board for the dimension guides
-
-// Room framing — copied from CanvasBackdrop so the two editors frame a board
-// identically. The photo is an empty square room; the board stands on the floor.
+// Room framing. Full empty-room photo (square); the board stands on the floor.
 const BACKDROP_SRC = "/canvas-backdrop.webp";
-const IMG_ASPECT = 1; // square
-const FLOOR = 0.8756; // wall/floor junction, as a fraction of image height
-const WALL_FILL = 0.85; // how much of the wall a tall board fills
-const SIDE_ROOM = 1.35; // room needed either side of the board
+const IMG_ASPECT = 1; // the photo is square
+const FLOOR = 0.8756; // wall/floor junction, as a fraction of room height
+const WALL_FILL = 0.8; // how much of the wall a tall board fills
+const SIDE_ROOM = 2.6; // room width as a multiple of the board width
+
+/** The full stage (room) size for a given board, in px. */
+export function stageSize(boardW: number, boardH: number) {
+  const roomH = Math.max(boardH / (FLOOR * WALL_FILL), boardW * SIDE_ROOM);
+  const roomW = roomH * IMG_ASPECT;
+  return { roomW: Math.round(roomW), roomH: Math.round(roomH) };
+}
 
 type Props = {
   boardW: number;
@@ -41,26 +45,16 @@ export const TemplateStage = forwardRef<HTMLDivElement, Props>(function Template
   { boardW, boardH, canvasId, widthCm, heightCm },
   containerRef
 ) {
-  const hostW = boardW + WORK_PAD * 2;
-  const hostH = boardH + WORK_PAD * 2;
-
-  // Backdrop size + placement (same maths as CanvasBackdrop).
-  const bH = Math.max(
-    boardH / (FLOOR * WALL_FILL),
-    (boardW * SIDE_ROOM) / IMG_ASPECT
-  );
-  const bW = bH * IMG_ASPECT;
-  const bLeft = WORK_PAD + boardW / 2 - bW / 2;
-  const bTop = WORK_PAD + boardH - FLOOR * bH;
+  const { roomW, roomH } = stageSize(boardW, boardH);
+  const boardLeft = Math.round((roomW - boardW) / 2);
+  const boardTop = Math.round(FLOOR * roomH - boardH); // stand on the floor line
 
   const outline = archPath(boardW, boardH);
   const showDims = !!widthCm && !!heightCm;
 
   return (
-    <div
-      style={{ position: "relative", width: hostW, height: hostH, overflow: "hidden" }}
-    >
-      {/* room, behind everything and clipped by the host overflow */}
+    <div style={{ position: "relative", width: roomW, height: roomH }}>
+      {/* the room, filling the whole stage */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={BACKDROP_SRC}
@@ -68,10 +62,9 @@ export const TemplateStage = forwardRef<HTMLDivElement, Props>(function Template
         draggable={false}
         style={{
           position: "absolute",
-          left: Math.round(bLeft),
-          top: Math.round(bTop),
-          width: Math.round(bW),
-          height: Math.round(bH),
+          inset: 0,
+          width: roomW,
+          height: roomH,
           maxWidth: "none",
           pointerEvents: "none",
           userSelect: "none",
@@ -79,23 +72,22 @@ export const TemplateStage = forwardRef<HTMLDivElement, Props>(function Template
         }}
       />
 
-      {/* the board: the composed, arch-clipped design */}
+      {/* the board: the composed design, cut to the arch */}
       <div
         style={{
           position: "absolute",
-          left: WORK_PAD,
-          top: WORK_PAD,
+          left: boardLeft,
+          top: boardTop,
           width: boardW,
           height: boardH,
           zIndex: 1,
         }}
       >
-        {/* SVG is injected here by the editor. Clipped to the arch in PIXEL space
-            (clip-path: path) so it stays correct under the editor's zoom — unlike
-            an SVG clip on the scaled root, whose coordinate space is ambiguous.
-            The print file is clipped separately, server-side. Drop shadow lifts
-            it off the wall as a physical board (and follows the arch, since it is
-            the shadow of the clipped shape). */}
+        {/* SVG injected here by the editor. Cut to the arch in PIXEL space
+            (clip-path: path) so it stays correct under the editor's zoom — an
+            SVG clip on the scaled root has an ambiguous coordinate space. The
+            print file is clipped separately, server-side. Drop shadow follows
+            the arch (it is the shadow of the clipped shape). */}
         <div
           id={canvasId}
           ref={containerRef}
@@ -106,17 +98,17 @@ export const TemplateStage = forwardRef<HTMLDivElement, Props>(function Template
             WebkitClipPath: `path('${outline}')`,
             filter: "drop-shadow(0 3px 10px rgba(20,25,40,0.12))",
           }}
-          className="[&>svg]:block [&>svg]:w-full [&>svg]:h-full"
         />
 
         {/* red cut line + dimension guides, above the artwork */}
         <svg
-          width={boardW}
-          height={boardH}
           viewBox={`0 0 ${boardW} ${boardH}`}
           style={{
             position: "absolute",
             inset: 0,
+            width: boardW,
+            height: boardH,
+            maxWidth: "none",
             pointerEvents: "none",
             overflow: "visible",
             zIndex: 2,

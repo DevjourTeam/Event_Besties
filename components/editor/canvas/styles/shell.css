@@ -31,12 +31,21 @@
   padding: var(--ps-sp-5);
   display: grid;
   grid-template-columns: var(--ps-sidebar-w) 1fr;
+  /* Cap the row to the container height so a tall canvas cannot grow the grid
+     past .ps-stage and shove the bottom bar out. minmax(0,1fr) lets the column
+     shrink below its content; the canvas area scrolls/zooms to fit instead. */
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--ps-sp-5);
   /* exact reference editor-window size */
   width: 1200px;
   height: 834.41px;
+  /* …but never taller than the window, or the bottom bar (Process button) falls
+     below the fold. The canvas area is flex:1 and absorbs the reduction; the
+     zoom refits its content. Only bites on windows already shorter than 834px. */
+  max-height: calc(100dvh - 16px);
   max-width: 100%;
   margin: 0 auto;
+  overflow: hidden;
 }
 
 /* ======================= LEFT TOOL SIDEBAR ======================= */
@@ -1021,6 +1030,9 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Allow the column to shrink below its content so the canvas area (flex:1)
+     yields space to the bottom bar instead of overflowing the stage. */
+  min-height: 0;
 }
 
 /* ---- Canvas top bar ---- */
@@ -1507,11 +1519,10 @@
   overflow: auto;
   padding: var(--ps-sp-4);
 }
-.ps-tpl-canvas svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
+/* The stage sizes its own SVGs (design + dimension overlay) explicitly, so the
+   old blanket `svg { max-width:100%; height:auto }` here must NOT apply — it
+   fought the zoom and let the board overflow. Scoped to nothing on purpose;
+   kept as a marker of why it was removed. */
 
 /* A three-column stage when the right panel is showing. */
 .ps-editor .ps-stage:has(> .ps-sidebar--right) {
