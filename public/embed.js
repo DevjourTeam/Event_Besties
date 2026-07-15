@@ -38,9 +38,15 @@
         window.ShopifyAnalytics.meta.product &&
         window.ShopifyAnalytics.meta.product.id) ||
       null;
-    if (!productId) return;
 
     function init() {
+      // Cart thumbnail swap runs on every page (cart page, drawer, mini-cart) —
+      // it is independent of being on a product page.
+      swapCartThumbnails();
+
+      // The product-page button logic only applies when we are on a configured
+      // product page.
+      if (!productId) return;
       fetch(BASE_URL + "/api/editor/config/" + encodeURIComponent(productId))
         .then(function (r) {
           if (!r.ok) return null;
@@ -53,6 +59,103 @@
         .catch(function () {
           /* swallow */
         });
+    }
+
+    /**
+     * Show the customer's DESIGN as the cart line-item thumbnail instead of the
+     * generic product photo.
+     *
+     * The design preview is already stored on each line item as the `_Preview`
+     * property when it is added to the cart. Shopify has no cart-API field for a
+     * per-line image, so the theme keeps showing the product photo — we read the
+     * cart via /cart.js and swap each line's thumbnail to its `_Preview` URL.
+     *
+     * Matching is done by variant id and by the line-item key (both are exposed
+     * by most themes as data-* attributes or in variant links), with a safe
+     * fallback that never touches an image it cannot confidently match — so a
+     * "you may also like" product card is never affected.
+     */
+    function swapCartThumbnails() {
+      fetch("/cart.js", { headers: { Accept: "application/json" } })
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .then(function (cart) {
+          if (!cart || !cart.items || !cart.items.length) return;
+
+          // Build lookups: variantId -> previewUrl and lineKey -> previewUrl,
+          // only for lines that actually carry a design.
+          var byVariant = {};
+          var byKey = {};
+          for (var i = 0; i < cart.items.length; i++) {
+            var it = cart.items[i];
+            var props = it.properties || {};
+            var preview = props["_Preview"] || props["_preview_url"];
+            if (!preview) continue;
+            if (it.variant_id) byVariant[String(it.variant_id)] = preview;
+            if (it.key) byKey[String(it.key)] = preview;
+          }
+          if (!Object.keys(byVariant).length && !Object.keys(byKey).length) {
+            return;
+          }
+
+          applyThumbSwap(byVariant, byKey);
+          // Cart re-renders on quantity change; keep applying.
+          if (window.MutationObserver && !window.__ebCartObserver) {
+            window.__ebCartObserver = new MutationObserver(function () {
+              applyThumbSwap(byVariant, byKey);
+            });
+            window.__ebCartObserver.observe(document.body, {
+              childList: true,
+              subtree: true,
+            });
+          }
+        })
+        .catch(function () {
+          /* swallow — never break the cart */
+        });
+    }
+
+    function applyThumbSwap(byVariant, byKey) {
+      // Candidate line-item containers across common theme structures.
+      var rows = document.querySelectorAll(
+        "[data-line-item-key],[data-key],[data-cart-item],.cart-item,.cart__row,.cart-line-item,tr[data-variant-id]"
+      );
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var preview = null;
+
+        var key =
+          row.getAttribute("data-line-item-key") ||
+          row.getAttribute("data-key");
+        if (key && byKey[key]) preview = byKey[key];
+
+        if (!preview) {
+          // Find a variant id: a data attribute, or a variant= link, or an input.
+          var vid = row.getAttribute("data-variant-id");
+          if (!vid) {
+            var a = row.querySelector('a[href*="variant="]');
+            if (a) {
+              var m = a.getAttribute("href").match(/variant=(\d+)/);
+              if (m) vid = m[1];
+            }
+          }
+          if (!vid) {
+            var inp = row.querySelector('[name="id"],[data-variant-id]');
+            if (inp)
+              vid = inp.value || inp.getAttribute("data-variant-id") || "";
+          }
+          if (vid && byVariant[String(vid)]) preview = byVariant[String(vid)];
+        }
+
+        if (!preview) continue;
+        var img = row.querySelector("img");
+        if (img && img.getAttribute("src") !== preview) {
+          img.setAttribute("src", preview);
+          img.setAttribute("srcset", "");
+          img.removeAttribute("data-src");
+        }
+      }
     }
 
     // The variant the customer currently has selected, per the product form.
