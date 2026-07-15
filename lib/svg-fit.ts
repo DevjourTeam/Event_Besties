@@ -145,7 +145,11 @@ export function fitTextFields(
       ? (srcSvg.querySelector('[data-tf="' + f.nodeId + '"]') as Element | null)
       : null;
     if (el) {
-      const ts = el.querySelectorAll("tspan");
+      // Leaf tspans only — the ones that hold a line. A grouping tspan (colour
+      // run) has no y of its own, so reading it would give bad leading.
+      const ts = Array.from(el.querySelectorAll("tspan")).filter(
+        (t) => !t.querySelector("tspan") && (t.textContent || "").trim() !== ""
+      );
       if (ts.length > 1) {
         const y0 = parseFloat(ts[0].getAttribute("y") || "0");
         const y1 = parseFloat(ts[1].getAttribute("y") || "0");
@@ -163,7 +167,11 @@ export function fitTextFields(
     ) as SVGGraphicsElement | null;
     if (!el) continue;
 
-    const tspans = Array.from(el.querySelectorAll("tspan"));
+    // Leaf tspans only — the lines. Rewriting y on a grouping tspan (a colour
+    // run with no y of its own) would shift its children and break the layout.
+    const tspans = Array.from(el.querySelectorAll("tspan")).filter(
+      (t) => !t.querySelector("tspan") && (t.textContent || "").trim() !== ""
+    );
     const base = f.fontSize || 16;
     const ratio = leading[f.nodeId] || 1.2;
     const yFirst = tspans.length

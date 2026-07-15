@@ -137,6 +137,19 @@ function firstFamily(raw: string | null): string {
   return first.trim().replace(/^['"]|['"]$/g, "");
 }
 
+/**
+ * The tspans that actually hold a line of text: leaves (no child tspan) with
+ * non-whitespace content. Skips the grouping tspans Illustrator wraps colour
+ * runs in, and the stray-space tspans it emits for kerning. This is the ONE
+ * definition of "a line" shared by extraction, compose and fit — they must all
+ * agree, or the values, colours and positions drift apart.
+ */
+function leafLines(el: Element): Element[] {
+  return Array.from(el.querySelectorAll("tspan")).filter(
+    (t) => !t.querySelector("tspan") && (t.textContent ?? "").trim() !== ""
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * prepare — the whole upload-time story
  * ------------------------------------------------------------------ */
@@ -238,11 +251,13 @@ export function prepareSvg(svgText: string): PreparedTemplate {
 
     if (family) fontSet.add(family);
 
-    // One tspan per line is how Illustrator writes a multi-line block, so the
-    // line structure IS the tspan list. Collapsing it with \s+ would fold three
-    // lines into one string, and the customer would get a single line running
-    // off the artboard.
-    const lineEls = Array.from(el.querySelectorAll("tspan"));
+    // A line of text lives in a LEAF tspan (one with no child tspan). Illustrator
+    // nests tspans when runs differ in colour — "Happy 4th"/"Birthday" white, the
+    // name yellow — so grabbing every tspan would duplicate each line (outer +
+    // inner) and let compose overwrite a grouping tspan, deleting the positioned
+    // children under it and collapsing all lines onto one point. Whitespace-only
+    // leaves are Illustrator spacing artefacts, so they are not lines.
+    const lineEls = leafLines(el);
     const value = lineEls.length
       ? lineEls.map((t) => (t.textContent ?? "").trim()).join("\n")
       : (el.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -371,10 +386,13 @@ export function composeSvg(svgText: string, spec: ComposeSpec): string {
     const value = spec.textValues[field.nodeId];
     if (value === undefined) continue;
 
-    // Rebuild the line structure rather than mutating textContent, so a
-    // multi-line field survives the customer typing a different number of
-    // lines than the artwork shipped with.
-    const tspans = Array.from(el.querySelectorAll("tspan"));
+    // Only LEAF tspans hold a line (see leafLines). Illustrator wraps colour runs
+    // in grouping tspans; writing into one of those would delete the positioned
+    // child under it and stack every line on 0,0. Inlined here — this function is
+    // shipped into the print renderer by source, so it cannot import.
+    const tspans = Array.from(el.querySelectorAll("tspan")).filter(
+      (t) => !t.querySelector("tspan") && (t.textContent ?? "").trim() !== ""
+    );
     const lines = value.split("\n");
 
     // Artwork whose <text> holds a bare string, with no tspans. A single line can
@@ -400,12 +418,11 @@ export function composeSvg(svgText: string, spec: ComposeSpec): string {
       continue;
     }
 
-    // Reuse the artwork's own tspans. Each one carries the designer's per-line
-    // work — the stroke that draws the outline, the different fill on the child's
-    // name — and building fresh ones would silently drop all of it, leaving flat
-    // untinted text. So: keep the existing nodes and swap only their content,
-    // clone the last one to grow, drop the surplus to shrink. Never touch an
-    // attribute we did not put there.
+    // Reuse the artwork's own leaf tspans. Each carries the designer's per-line
+    // work — stroke, per-line fill, x/y — and rebuilding would drop all of it. So
+    // swap only text into the leaf that already exists (preserving colour and
+    // position exactly), clone the last leaf beside itself to grow, and blank the
+    // surplus to shrink. Never write into a node we did not put text in before.
     const y0 = parseFloat(
       tspans[0].getAttribute("y") ?? el.getAttribute("y") ?? "0"
     );
@@ -418,15 +435,17 @@ export function composeSvg(svgText: string, spec: ComposeSpec): string {
     lines.forEach((line, i) => {
       let t = tspans[i];
       if (!t) {
-        // cloneNode(false): copies every attribute, drops the old text.
+        // cloneNode(false): copies class/x/y (so colour follows), drops old text.
         t = template.cloneNode(false) as typeof template;
         t.setAttribute("y", String(y0 + step * i));
-        el.appendChild(t);
+        (template.parentNode as Node).appendChild(t);
       }
       t.textContent = line;
     });
 
-    for (let i = lines.length; i < tspans.length; i++) tspans[i].remove();
+    // Fewer lines than authored: blank the extras rather than remove them, so a
+    // grouping tspan is never left empty and reflowing back up stays lossless.
+    for (let i = lines.length; i < tspans.length; i++) tspans[i].textContent = "";
   }
 
   for (const [nodeId, hex] of Object.entries(spec.colorValues)) {
