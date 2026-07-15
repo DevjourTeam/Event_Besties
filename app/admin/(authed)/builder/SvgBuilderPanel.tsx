@@ -27,6 +27,7 @@ import {
   type DraftSize,
 } from "@/components/admin/SizesPanel";
 import { BuilderSection } from "@/components/admin/BuilderSection";
+import { renderTemplateMockup } from "@/lib/product-mockup";
 
 /** The live preview; fitTextFields addresses it by id. */
 const PREVIEW_ID = "eb-builder-preview";
@@ -438,6 +439,17 @@ export function SvgBuilderPanel() {
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreate}
         priceNote={`${sizes.length} ${sizes.length === 1 ? "size" : "sizes"} · ${priceLabelFor(sizes)} — each size is priced on the Sizes panel.`}
+        autoMockupLabel="Your design shown on the arch board, standing in the room."
+        autoMockup={async (uploaded) => {
+          // Composite the attached flat design onto the room + arch. With nothing
+          // attached there is no design to place, so leave the image unset.
+          if (!uploaded || !prepared) return null;
+          const aspect =
+            prepared.width && prepared.height
+              ? prepared.width / prepared.height
+              : 74 / 150;
+          return renderTemplateMockup(uploaded, { type: "arch", svgPath: null }, aspect);
+        }}
       />
     </div>
   );

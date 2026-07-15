@@ -26,6 +26,15 @@ type Props = {
    * price field with this summary, e.g. "3 sizes · £69.99 – £109.99".
    */
   priceNote?: string;
+  /**
+   * Auto-generate the product image (room mockup) instead of using the raw
+   * attachment. Given the manually-attached image as a data URL (or null),
+   * returns the final product-image data URL. When provided, a checkbox lets the
+   * admin turn it off and use their own image as-is. Absent = old behaviour.
+   */
+  autoMockup?: (uploadedDataUrl: string | null) => Promise<string | null>;
+  /** Short line describing what the mockup will be, shown by the checkbox. */
+  autoMockupLabel?: string;
 };
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -37,7 +46,14 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function CreateProductModal({ open, onClose, onSubmit, priceNote }: Props) {
+export function CreateProductModal({
+  open,
+  onClose,
+  onSubmit,
+  priceNote,
+  autoMockup,
+  autoMockupLabel,
+}: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("0");
@@ -45,6 +61,9 @@ export function CreateProductModal({ open, onClose, onSubmit, priceNote }: Props
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // On by default when auto-generation is available — that is the whole point.
+  const [autoOn, setAutoOn] = useState(true);
+  const [mockupPreview, setMockupPreview] = useState<string | null>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,6 +104,7 @@ export function CreateProductModal({ open, onClose, onSubmit, priceNote }: Props
     setPrice("0");
     setImageFile(null);
     setImagePreview(null);
+    setMockupPreview(null);
     setError(null);
   };
 
@@ -105,6 +125,17 @@ export function CreateProductModal({ open, onClose, onSubmit, priceNote }: Props
         imageDataUrl = await fileToDataUrl(imageFile);
       } catch {
         setError("Could not read image file");
+        return;
+      }
+    }
+    // When auto-generation is on, hand the attachment (or null) to the builder's
+    // mockup fn and use its output as the product image. Off = use the raw file.
+    if (autoMockup && autoOn) {
+      try {
+        const generated = await autoMockup(imageDataUrl);
+        if (generated) imageDataUrl = generated;
+      } catch {
+        setError("Could not generate the product mockup");
         return;
       }
     }
@@ -233,6 +264,56 @@ export function CreateProductModal({ open, onClose, onSubmit, priceNote }: Props
               Leave empty to add an image later in Shopify admin.
             </p>
           </Field>
+
+          {autoMockup && (
+            <Field label="Product image mockup">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoOn}
+                  onChange={(e) => setAutoOn(e.target.checked)}
+                  className="mt-0.5 accent-gold"
+                />
+                <span className="text-[12px] text-[#1b2333] leading-snug">
+                  Auto-generate room mockup
+                  {autoMockupLabel ? (
+                    <span className="block text-[10px] text-text-muted">
+                      {autoMockupLabel}
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+
+              {autoOn && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const uploaded = imageFile
+                          ? await fileToDataUrl(imageFile)
+                          : null;
+                        setMockupPreview(await autoMockup(uploaded));
+                      } catch {
+                        setMockupPreview(null);
+                      }
+                    }}
+                    className="h-8 px-3 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface"
+                  >
+                    Preview mockup
+                  </button>
+                  {mockupPreview && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={mockupPreview}
+                      alt="Generated product mockup"
+                      className="mt-2 w-full max-w-[260px] rounded-lg border border-card-border"
+                    />
+                  )}
+                </div>
+              )}
+            </Field>
+          )}
         </div>
 
         {error && (

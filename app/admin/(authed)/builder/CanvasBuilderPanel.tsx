@@ -11,6 +11,7 @@ import {
 } from "@/components/admin/CreateProductModal";
 import type { CanvasConfig, CanvasShape } from "@/lib/types";
 import { buildShapePath } from "@/components/editor/canvas/editor/shapes";
+import { renderCanvasLineup } from "@/lib/product-mockup";
 import {
   SizesPanel,
   priceLabelFor,
@@ -295,6 +296,20 @@ export function CanvasBuilderPanel() {
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreate}
         priceNote={`${sizes.length} ${sizes.length === 1 ? "size" : "sizes"} · ${priceLabel} — each size is priced on the Sizes panel.`}
+        autoMockupLabel="Blank boards at each size, shown standing in the room."
+        autoMockup={async () =>
+          renderCanvasLineup(
+            sizes.map((s) => ({
+              label: s.label,
+              heightCm: s.printHeightCm ?? 150,
+              widthCm: s.printWidthCm ?? 100,
+            })),
+            {
+              type: shape,
+              svgPath: shape === "custom" ? shapePath || null : null,
+            }
+          )
+        }
       />
     </div>
   );
