@@ -119,12 +119,18 @@ export async function renderTemplateMockup(
   ctx.drawImage(design, x + (boardW - dw) / 2, y + (boardH - dh) / 2, dw, dh);
   ctx.restore();
 
-  // A hairline edge so the board reads as a physical object on the wall.
+  // A hairline edge so the board reads as a physical object on the wall. The
+  // outline path must be OFFSET to where the board sits — drawing it at origin
+  // left a stray line clipped inside the board.
   ctx.save();
-  clipToShape(ctx, shape, x, y, boardW, boardH);
   ctx.lineWidth = 2;
   ctx.strokeStyle = "rgba(0,0,0,0.10)";
-  ctx.stroke(new Path2D(buildShapePath(shape, boardW, boardH) as string));
+  const edge = new Path2D();
+  edge.addPath(
+    new Path2D(buildShapePath(shape, boardW, boardH) as string),
+    new DOMMatrix().translateSelf(x, y)
+  );
+  ctx.stroke(edge);
   ctx.restore();
 
   return canvas.toDataURL("image/jpeg", 0.9);
