@@ -20,7 +20,11 @@ import {
   type DraftSize,
 } from "@/components/admin/SizesPanel";
 
-const SHAPE_OPTIONS: { value: CanvasShape; label: string }[] = [
+// Every shape the editor can cut. Only the ones in SHAPE_OPTIONS are offered to
+// the admin — the client sells arch boards only, so that is all that shows. To
+// re-enable a shape, add it back to SHAPE_OPTIONS; the editor already supports
+// all of these.
+const ALL_SHAPES: { value: CanvasShape; label: string }[] = [
   { value: "rect", label: "Rectangle" },
   { value: "rounded", label: "Rounded rectangle" },
   { value: "arch", label: "Arch (sailboard)" },
@@ -28,6 +32,7 @@ const SHAPE_OPTIONS: { value: CanvasShape; label: string }[] = [
   { value: "ellipse", label: "Ellipse" },
   { value: "custom", label: "Custom SVG path" },
 ];
+const SHAPE_OPTIONS = ALL_SHAPES.filter((s) => s.value === "arch");
 
 
 export function CanvasBuilderPanel() {
