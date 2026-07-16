@@ -322,9 +322,13 @@ export function SvgBuilderPanel() {
   return (
     // Artwork | sizes | preview | config, side by side. Each panel keeps its own
     // column rather than stacking into one long scroll.
-    <div className="flex min-h-[calc(100vh-180px)]">
+    <div className="flex flex-col min-h-[calc(100vh-180px)]">
+      {/* Artwork | Sizes | Preview side by side on wide screens; they stack on
+          tablet and below. The JSON is a full-width strip underneath, so it
+          never squeezes the working columns. */}
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
       {/* COLUMN 1 — the artwork and the fields read out of it */}
-      <div className="w-[320px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-5 space-y-5">
+      <div className="w-full lg:w-[300px] xl:w-[320px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-card-border lg:overflow-y-auto p-5 space-y-5">
         <BuilderSection title="Artwork">
           <SVGUploader onLoaded={handleLoaded} />
 
@@ -365,7 +369,7 @@ export function SvgBuilderPanel() {
       </div>
 
       {/* COLUMN 2 — sizes, then the CTA */}
-      <div className="w-[320px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-5 space-y-5">
+      <div className="w-full lg:w-[300px] xl:w-[320px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-card-border lg:overflow-y-auto p-5 space-y-5">
         <BuilderSection title="Sizes & pricing">
           <SizesPanel sizes={sizes} onChange={setSizes} />
         </BuilderSection>
@@ -394,15 +398,15 @@ export function SvgBuilderPanel() {
       </div>
 
       {/* COLUMN 3 — preview */}
-      <div className="flex-1 min-w-0 overflow-y-auto p-6">
+      <div className="flex-1 min-w-0 lg:overflow-y-auto p-6">
         <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
           Preview — as the customer will see it
         </div>
-        <div className="bg-white border border-card-border rounded-card p-5 flex items-center justify-center min-h-[560px]">
+        <div className="bg-white border border-card-border rounded-card p-5 flex items-center justify-center min-h-[360px] lg:min-h-[560px]">
           {previewSvg ? (
             <div
               id={PREVIEW_ID}
-              className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-[520px] [&>svg]:h-auto [&>svg]:w-auto"
+              className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-[320px] lg:[&>svg]:max-h-[520px] [&>svg]:h-auto [&>svg]:w-auto"
               // Safe: prepareSvg strips <script>, on* handlers and javascript: hrefs.
               dangerouslySetInnerHTML={{ __html: previewSvg }}
             />
@@ -413,26 +417,35 @@ export function SvgBuilderPanel() {
           )}
         </div>
       </div>
+      </div>
 
-      {/* COLUMN 4 — the config, in its own column */}
-      <div className="w-[340px] shrink-0 border-l border-card-border overflow-y-auto p-5">
-        <div className="flex items-center justify-between mb-2">
+      {/* FULL WIDTH — the config below all columns. A debugging aid, so it
+          collapses out of the way. Matches the canvas builder. */}
+      <details className="group shrink-0 border-t border-card-border bg-form-surface px-6 py-4">
+        <summary className="flex items-center justify-between cursor-pointer list-none">
           <span className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
-            Template config
+            Template config (JSON)
           </span>
-          <button
-            type="button"
-            onClick={copyJson}
-            disabled={!configJson}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface disabled:opacity-50"
-          >
-            <CopyIcon size={12} /> Copy
-          </button>
-        </div>
-        <pre className="bg-code-bg text-code-text text-[11px] font-mono leading-relaxed rounded-lg p-3 max-h-[calc(100vh-280px)] overflow-auto">
+          <span className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                copyJson();
+              }}
+              disabled={!configJson}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-card-border bg-white text-[11px] hover:bg-form-surface disabled:opacity-50"
+            >
+              <CopyIcon size={12} /> Copy
+            </button>
+            <span className="text-[11px] text-text-muted group-open:hidden">Show</span>
+            <span className="text-[11px] text-text-muted hidden group-open:inline">Hide</span>
+          </span>
+        </summary>
+        <pre className="mt-3 bg-code-bg text-code-text text-[11px] font-mono leading-relaxed rounded-lg p-3 max-h-[240px] overflow-auto">
           {configJson || "// Upload an SVG to generate config"}
         </pre>
-      </div>
+      </details>
 
       <CreateProductModal
         open={modalOpen}

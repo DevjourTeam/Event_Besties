@@ -164,16 +164,16 @@ export function CanvasBuilderPanel() {
     // underneath. Each panel keeps its own column instead of collapsing into one
     // long scroll.
     <div className="flex flex-col min-h-[calc(100vh-180px)]">
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
         {/* COLUMN 1 — sizes */}
-        <div className="w-[360px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-6">
+        <div className="w-full lg:w-[340px] xl:w-[360px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-card-border lg:overflow-y-auto p-6 space-y-6">
           <Card title="Sizes">
             <SizesPanel sizes={sizes} onChange={setSizes} withDimensions />
           </Card>
         </div>
 
       {/* COLUMN 2 — the rest of the product settings, then the CTA */}
-      <div className="w-[340px] shrink-0 bg-white border-r border-card-border overflow-y-auto p-6 space-y-6">
+      <div className="w-full lg:w-[320px] xl:w-[340px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-card-border lg:overflow-y-auto p-6 space-y-6">
         <Card title="Bleed & safe zone">
           <div className="grid grid-cols-2 gap-3">
             <NumberField label="Bleed (px)" value={bleedPx} onChange={setBleedPx} min={0} />
@@ -243,7 +243,7 @@ export function CanvasBuilderPanel() {
       </div>
 
         {/* COLUMN 3 — preview */}
-        <div className="flex-1 min-w-0 overflow-y-auto p-6">
+        <div className="flex-1 min-w-0 lg:overflow-y-auto p-6">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted">
               Preview — as the customer will see it
