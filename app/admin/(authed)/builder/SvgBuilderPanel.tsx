@@ -326,9 +326,9 @@ export function SvgBuilderPanel() {
       {/* Artwork | Sizes | Preview side by side on wide screens; they stack on
           tablet and below. The JSON is a full-width strip underneath, so it
           never squeezes the working columns. */}
-      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
+      <div className="flex flex-col xl:flex-row flex-1 min-h-0">
       {/* COLUMN 1 — the artwork and the fields read out of it */}
-      <div className="w-full lg:w-[300px] xl:w-[320px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-card-border lg:overflow-y-auto p-5 space-y-5">
+      <div className="w-full xl:w-[300px] shrink-0 bg-white border-b xl:border-b-0 xl:border-r border-card-border xl:overflow-y-auto p-5 space-y-5">
         <BuilderSection title="Artwork">
           <SVGUploader onLoaded={handleLoaded} />
 
@@ -369,7 +369,7 @@ export function SvgBuilderPanel() {
       </div>
 
       {/* COLUMN 2 — sizes, then the CTA */}
-      <div className="w-full lg:w-[300px] xl:w-[320px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-card-border lg:overflow-y-auto p-5 space-y-5">
+      <div className="w-full xl:w-[300px] shrink-0 bg-white border-b xl:border-b-0 xl:border-r border-card-border xl:overflow-y-auto p-5 space-y-5">
         <BuilderSection title="Sizes & pricing">
           <SizesPanel sizes={sizes} onChange={setSizes} />
         </BuilderSection>
@@ -398,15 +398,15 @@ export function SvgBuilderPanel() {
       </div>
 
       {/* COLUMN 3 — preview */}
-      <div className="flex-1 min-w-0 lg:overflow-y-auto p-6">
+      <div className="flex-1 min-w-0 xl:overflow-y-auto p-6">
         <div className="text-[10px] tracking-[0.16em] uppercase text-text-muted mb-2">
           Preview — as the customer will see it
         </div>
-        <div className="bg-white border border-card-border rounded-card p-5 flex items-center justify-center min-h-[360px] lg:min-h-[560px]">
+        <div className="bg-white border border-card-border rounded-card p-5 flex items-center justify-center min-h-[360px] xl:min-h-[560px]">
           {previewSvg ? (
             <div
               id={PREVIEW_ID}
-              className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-[320px] lg:[&>svg]:max-h-[520px] [&>svg]:h-auto [&>svg]:w-auto"
+              className="w-full h-full flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-[320px] xl:[&>svg]:max-h-[520px] [&>svg]:h-auto [&>svg]:w-auto"
               // Safe: prepareSvg strips <script>, on* handlers and javascript: hrefs.
               dangerouslySetInnerHTML={{ __html: previewSvg }}
             />
