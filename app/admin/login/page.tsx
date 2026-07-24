@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { redirect } from "next/navigation";
+import { AuthError } from "next-auth";
 import { signIn } from "@/lib/auth";
 import { GoogleIcon } from "@/components/admin/Icons";
 import heroImg from "@/public/login-hero.webp";
@@ -8,6 +10,25 @@ async function googleSignInAction(formData: FormData) {
   "use server";
   const callbackUrl = (formData.get("callbackUrl") as string) || "/admin/dashboard";
   await signIn("google", { redirectTo: callbackUrl });
+}
+
+async function credentialsSignInAction(formData: FormData) {
+  "use server";
+  const callbackUrl = (formData.get("callbackUrl") as string) || "/admin/dashboard";
+  try {
+    await signIn("credentials", {
+      email: formData.get("email"),
+      password: formData.get("password"),
+      redirectTo: callbackUrl,
+    });
+  } catch (error) {
+    // A bad credential throws AuthError; success throws a redirect we must
+    // re-throw so Next can follow it.
+    if (error instanceof AuthError) {
+      redirect("/admin/login?error=credentials");
+    }
+    throw error;
+  }
 }
 
 // Subtle film grain so the hero never looks like a flat wash.
@@ -103,14 +124,53 @@ export default async function LoginPage({
               </button>
             </form>
 
+            {/* Backup entry: email + password, for an admin address that cannot
+                use Google sign-in. */}
+            <div className="my-5 flex items-center gap-3">
+              <span className="h-px flex-1 bg-card-border" />
+              <span className="text-[10px] tracking-[0.14em] uppercase text-text-muted">
+                or
+              </span>
+              <span className="h-px flex-1 bg-card-border" />
+            </div>
+
+            <form action={credentialsSignInAction} className="space-y-3">
+              <input type="hidden" name="callbackUrl" value={callbackUrl} />
+              <input
+                type="email"
+                name="email"
+                required
+                autoComplete="username"
+                placeholder="Email"
+                className="w-full h-11 px-3 rounded-xl border border-card-border bg-white text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-[#e6469b]/30"
+              />
+              <input
+                type="password"
+                name="password"
+                required
+                autoComplete="current-password"
+                placeholder="Password"
+                className="w-full h-11 px-3 rounded-xl border border-card-border bg-white text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-[#e6469b]/30"
+              />
+              <button
+                type="submit"
+                className="w-full h-12 rounded-xl bg-[#1b2333] hover:bg-[#10151f] transition-colors text-[14px] font-medium text-white shadow-sm"
+              >
+                Sign in with email
+              </button>
+            </form>
+
             {error && (
               <div className="mt-4 text-[12px] text-[#a83232] bg-[#fbe9e9] border border-[#f1cccc] rounded-md px-3 py-2">
-                Sign-in failed. Make sure your Gmail address is in the admin allowlist.
+                {error === "credentials"
+                  ? "Sign-in failed. Check the email and password."
+                  : "Sign-in failed. Make sure your email is in the admin allowlist."}
               </div>
             )}
 
             <p className="mt-7 text-[11px] text-text-muted text-center leading-relaxed">
-              Only Gmail addresses listed in <code>ADMIN_ALLOWED_EMAILS</code> can sign in.
+              Google sign-in is limited to the admin allowlist. Email sign-in is a
+              backup for an approved address.
             </p>
           </div>
         </div>
