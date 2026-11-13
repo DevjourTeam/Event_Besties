@@ -379,6 +379,8 @@ export type ComposeSpec = {
      * renderer are handed one identical spec and cannot drift.
      */
     align?: "left" | "center" | "right";
+    /** Text-area width (% of board). Like align, only fitTextFields reads it. */
+    maxWidthPct?: number;
   }>;
   /** nodeId -> the text the customer typed. */
   textValues: Record<string, string>;

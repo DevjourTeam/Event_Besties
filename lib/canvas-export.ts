@@ -210,6 +210,8 @@ svg{display:block;width:${width}px;height:${height}px;}
         nodeId: f.nodeId,
         fontSize: f.fontSize,
         align: f.align,
+        fontFamily: f.fontFamily,
+        maxWidthPct: f.maxWidthPct,
       }))
     );
 

@@ -173,7 +173,12 @@ export function SvgBuilderPanel() {
         fitTextFields(
           `#${PREVIEW_ID}`,
           prepared.preparedSvg,
-          textFields.map((f) => ({ nodeId: f.nodeId, fontSize: f.fontSize }))
+          textFields.map((f) => ({
+            nodeId: f.nodeId,
+            fontSize: f.fontSize,
+            fontFamily: f.fontFamily,
+            maxWidthPct: f.maxWidthPct,
+          }))
         );
       } catch {
         /* an unrenderable preview is not worth breaking the builder over */

@@ -9,12 +9,13 @@
  * once it would actually leave the artboard. Pressing Enter adds a line, which
  * makes the block taller, which re-fits it: the same rule covers both.
  *
- * Why not fit each field to "its own area" instead? Because the SVG does not
- * record one. The only box we could measure is the bounding box of the AUTHORED
- * string, and that is a box around the words the designer happened to type — a
- * template reading "Anna" gives a ~94px box, so any longer name would be crushed
- * to ~5px. Fitting to a real per-field text area needs the admin to define one in
- * the builder; until then the canvas is the honest bound.
+ * Each field ALSO has a text area, so a long name stays inside its frame rather
+ * than just inside the board. The SVG does not record one, and the authored
+ * string's own box is too tight ("Anna" would crush any longer name), so the area
+ * is: centred on the authored copy, as wide as the larger of a % of the board
+ * (DEFAULT_AREA, or the builder's per-field maxWidthPct) and the authored copy. Never narrower than the design as drawn, so typing the authored
+ * text changes nothing. The area fit stops at a minimum size; the board fit
+ * after it is still the hard limit.
  *
  * Text is only ever shrunk, never grown past the authored size, so typing less
  * still looks like the designer's layout.
@@ -48,6 +49,22 @@ export type FitField = {
   nodeId: string;
   fontSize: number;
   align?: TextAlign;
+  /**
+   * The family composeSvg renders this field in. Used only to measure the
+   * AUTHORED copy in the same face the customer sees, so the text area below is
+   * sized from real metrics. Optional: without it the artwork's own CSS face is
+   * measured, which is the same thing for any template whose font wasn't remapped.
+   */
+  fontFamily?: string;
+  /**
+   * Width of this field's text AREA, as a % of the board width. The customer's
+   * text shrinks until it fits inside it. Undefined = the default (see
+   * DEFAULT_AREA). The area is never narrower than the authored copy, so the
+   * design as drawn is never shrunk by this.
+   */
+  maxWidthPct?: number;
+  /** Smallest the area fit may shrink to, as a % of the authored size. */
+  minFontPct?: number;
 };
 
 /** A bounding box in the root SVG's user units. */
@@ -62,6 +79,15 @@ export function fitTextFields(
   // undefined once this is stringified into Puppeteer, and the print renderer
   // would throw. See the self-contained note above.
   const MARGIN = 0.02; // keep type this far off the edge, as a fraction
+  // Text-area defaults. A field's area is centred on where the designer put the
+  // copy and is the wider of: DEFAULT_AREA of the board, or the authored copy
+  // plus AREA_PAD. Designers lay out their text boxes to at least DEFAULT_AREA.
+  const DEFAULT_AREA = 0.65;
+  // 0: long text never ends up wider than the designer's own copy, which is the
+  // width they already judged fits the frame. (Glow Party: +4% touched the neon.)
+  // A hair over 0 only to absorb measuring noise between the two renders.
+  const AREA_PAD = 0.01;
+  const DEFAULT_MIN_FONT = 0.4; // area fit never goes below this × authored size
 
   const root = document.querySelector(rootSelector);
   const svg = root ? (root.querySelector("svg") as SVGSVGElement | null) : null;
@@ -82,15 +108,18 @@ export function fitTextFields(
   };
 
   /* --- element space <-> root space -------------------------------------- */
-  const toRoot = (el: SVGGraphicsElement): DOMMatrix | null => {
+  const toRoot = (
+    el: SVGGraphicsElement,
+    within: SVGSVGElement = svg
+  ): DOMMatrix | null => {
     const e = el.getScreenCTM();
-    const r = svg.getScreenCTM();
+    const r = within.getScreenCTM();
     if (!e || !r) return null;
     return r.inverse().multiply(e); // element user space -> root user space
   };
 
   /** The element's bounding box expressed in ROOT user units. */
-  const rootBox = (el: SVGGraphicsElement) => {
+  const rootBox = (el: SVGGraphicsElement, within: SVGSVGElement = svg) => {
     let bb: DOMRect;
     try {
       bb = el.getBBox() as DOMRect;
@@ -98,7 +127,7 @@ export function fitTextFields(
       return null;
     }
     if (!bb.width && !bb.height) return null;
-    const m = toRoot(el);
+    const m = toRoot(el, within);
     if (!m) return null;
 
     const corners = [
@@ -166,17 +195,25 @@ export function fitTextFields(
       return { first, tspans, textEl: isText ? first : null };
     };
 
-  /* --- leading per field, read from the pristine SVG -------------------- */
+  /* --- leading + authored text area per field, from the pristine SVG ---- */
   const leading: Record<string, number> = {};
+  const areas: Record<string, { x: number; w: number }> = {};
+  const authoredText: Record<string, string> = {};
+  // Same rendered width as the live artwork: glyph hinting varies with scale,
+  // so measuring the authored copy at another size gives a slightly different
+  // width — enough to nudge untouched text down a few percent.
+  const liveW = Math.max(1, Math.round(svg.getBoundingClientRect().width)) || 1000;
   const holder = document.createElement("div");
   holder.setAttribute(
     "style",
-    "position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;"
+    "position:absolute;left:-99999px;top:0;width:" +
+      liveW +
+      "px;visibility:hidden;pointer-events:none;"
   );
   holder.innerHTML = preparedSvg;
   document.body.appendChild(holder);
 
-  const srcSvg = holder.querySelector("svg");
+  const srcSvg = holder.querySelector("svg") as SVGSVGElement | null;
   const srcResolve = srcSvg ? resolve(srcSvg) : null;
   for (const f of fields) {
     const base = f.fontSize || 16;
@@ -188,6 +225,46 @@ export function fitTextFields(
       if (y1 > y0) step = y1 - y0;
     }
     leading[f.nodeId] = step / base; // as a multiple of the font size
+
+    // The authored copy's box, measured in the face the customer will see.
+    // Anything that fails to measure simply gets no area, i.e. the old
+    // whole-board behaviour — never a worse one.
+    if (!r || !srcSvg) continue;
+    try {
+      const parts: SVGGraphicsElement[] = r.tspans.length
+        ? r.tspans
+        : [r.textEl || r.first];
+      authoredText[f.nodeId] = parts
+        .map((p) => p.textContent || "")
+        .filter((s) => s.trim() !== "")
+        .join("\n");
+      if (f.fontFamily) {
+        Array.from(srcSvg.querySelectorAll('[data-tf="' + f.nodeId + '"]')).forEach(
+          (n) => {
+            (n as unknown as HTMLElement).style.fontFamily = "'" + f.fontFamily + "'";
+          }
+        );
+      }
+      let box: RootBox | null = null;
+      for (const p of parts) {
+        const b = rootBox(p, srcSvg);
+        if (b) box = box ? unionBox(box, b) : b;
+      }
+      if (!box || !box.width) continue;
+
+      const pct =
+        typeof f.maxWidthPct === "number" && f.maxWidthPct > 0
+          ? Math.min(f.maxWidthPct, 100) / 100
+          : DEFAULT_AREA;
+      const w = Math.min(bounds.w, Math.max(cw * pct, box.width * (1 + AREA_PAD)));
+      // Centred on the authored copy, then slid (not squeezed) onto the board.
+      let x = box.x + box.width / 2 - w / 2;
+      if (x < bounds.x) x = bounds.x;
+      if (x + w > bounds.x + bounds.w) x = bounds.x + bounds.w - w;
+      areas[f.nodeId] = { x, w };
+    } catch {
+      /* unmeasurable: fall back to the whole board */
+    }
   }
   holder.remove();
 
@@ -222,6 +299,17 @@ export function fitTextFields(
     // SVG's own text-anchor aligns; we just give every line ONE shared anchor
     // point, chosen in canvas space and converted back into the element's own
     // units (the <text> carries a transform, so a canvas x is not a local x).
+    // The horizontal box this field lives in: its text area, or the board.
+    // Copy the customer hasn't changed is the design as drawn — it keeps the
+    // original whole-board rule exactly, so this can never alter it.
+    const liveText = targets
+      .map((t) => t.textContent || "")
+      .filter((s) => s.trim() !== "")
+      .join("\n");
+    const unchanged = authoredText[f.nodeId] === liveText;
+    const area =
+      (!unchanged && areas[f.nodeId]) || { x: bounds.x, w: bounds.w };
+
     if (f.align) {
       const anchor =
         f.align === "left" ? "start" : f.align === "right" ? "end" : "middle";
@@ -229,10 +317,10 @@ export function fitTextFields(
 
       const anchorX =
         f.align === "left"
-          ? bounds.x
+          ? area.x
           : f.align === "right"
-          ? bounds.x + bounds.w
-          : bounds.x + bounds.w / 2;
+          ? area.x + area.w
+          : area.x + area.w / 2;
 
       const m = toRoot(first);
       if (m) {
@@ -265,24 +353,40 @@ export function fitTextFields(
     apply(size);
 
     // Text metrics are not perfectly linear in the font size, so converge.
-    for (let i = 0; i < 8; i++) {
-      const b = fieldBox();
-      if (!b || !b.width || !b.height) break;
-      const k = Math.min(bounds.w / b.width, bounds.h / b.height);
-      if (k >= 0.999) break; // fits — and we never grow past the authored size
-      size = Math.max(6, size * k * 0.99);
-      apply(size);
+    // Pass 1: fit the field's text AREA, but not below the minimum size.
+    // Pass 2: the board itself — the original rule, still the hard limit, so
+    // text held up by the minimum can never run off the print.
+    const minPct =
+      typeof f.minFontPct === "number" && f.minFontPct > 0
+        ? Math.min(f.minFontPct, 100) / 100
+        : DEFAULT_MIN_FONT;
+    const passes = [
+      { w: area.w, floor: Math.max(6, base * minPct) },
+      { w: bounds.w, floor: 6 },
+    ];
+    for (const pass of passes) {
+      for (let i = 0; i < 8; i++) {
+        const b = fieldBox();
+        if (!b || !b.width || !b.height) break;
+        const k = Math.min(pass.w / b.width, bounds.h / b.height);
+        if (k >= 0.999) break; // fits — and we never grow past the authored size
+        const next = Math.max(pass.floor, size * k * 0.99);
+        if (next >= size) break; // already at this pass's floor
+        size = next;
+        apply(size);
+      }
     }
 
     /* --- pull it back inside if it still hangs over an edge -------------- */
     const b = fieldBox();
     if (!b) continue;
 
+    // Horizontally: into its area when it fits there, else onto the board.
+    const hx = b.width <= area.w + 0.5 ? area : { x: bounds.x, w: bounds.w };
     let dx = 0;
     let dy = 0;
-    if (b.x < bounds.x) dx = bounds.x - b.x;
-    else if (b.x + b.width > bounds.x + bounds.w)
-      dx = bounds.x + bounds.w - (b.x + b.width);
+    if (b.x < hx.x) dx = hx.x - b.x;
+    else if (b.x + b.width > hx.x + hx.w) dx = hx.x + hx.w - (b.x + b.width);
     if (b.y < bounds.y) dy = bounds.y - b.y;
     else if (b.y + b.height > bounds.y + bounds.h)
       dy = bounds.y + bounds.h - (b.y + b.height);

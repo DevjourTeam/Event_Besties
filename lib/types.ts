@@ -31,7 +31,21 @@ export type TemplateTextField = {
   originalFont: string;
   fontSize: number;
   fill: string;
+  /**
+   * Text-area width as a % of the board width; long text shrinks to fit it.
+   * Absent = the default in svg-fit (and never narrower than the authored copy).
+   */
+  maxWidthPct?: number;
+  /** Most characters the customer may type (newlines count). Absent = default. */
+  maxChars?: number;
 };
+
+/** Default character limit for a text field — never below the authored copy. */
+export const DEFAULT_MAX_CHARS = 40;
+export function maxCharsFor(f: Pick<TemplateTextField, "value" | "maxChars">): number {
+  const set = typeof f.maxChars === "number" && f.maxChars > 0 ? f.maxChars : DEFAULT_MAX_CHARS;
+  return Math.max(set, f.value.length);
+}
 
 /**
  * A colour the customer may change. Slots are keyed by the fill value itself,

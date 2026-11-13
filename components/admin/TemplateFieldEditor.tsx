@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import type { TemplateTextField, CustomFont } from "@/lib/types";
+import { DEFAULT_MAX_CHARS, type TemplateTextField, type CustomFont } from "@/lib/types";
 import { isGoogleFont } from "@/lib/google-fonts";
 import { isCustomFont } from "@/lib/custom-fonts";
 import googleFontsList from "@/lib/google-fonts-list.json";
@@ -169,11 +169,71 @@ export function TemplateFieldEditor({
                   />
                   Customer can edit this text
                 </label>
+
+                {f.editable && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <NumberSetting
+                      label="Text area width (% of board)"
+                      value={f.maxWidthPct}
+                      placeholder={`${DEFAULT_AREA_PCT} (default)`}
+                      min={10}
+                      max={100}
+                      onChange={(v) => patch(i, { maxWidthPct: v })}
+                    />
+                    <NumberSetting
+                      label="Max characters"
+                      value={f.maxChars}
+                      placeholder={`${Math.max(DEFAULT_MAX_CHARS, f.value.length)} (default)`}
+                      min={Math.max(1, f.value.length)}
+                      max={500}
+                      onChange={(v) => patch(i, { maxChars: v })}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       </section>
+    </div>
+  );
+}
+
+/** Mirrors DEFAULT_AREA inside svg-fit (which can't export it: it is stringified). */
+const DEFAULT_AREA_PCT = 65;
+
+/** An optional whole-number setting; empty means "use the default". */
+function NumberSetting({
+  label,
+  value,
+  placeholder,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number | undefined;
+  placeholder: string;
+  min: number;
+  max: number;
+  onChange: (v: number | undefined) => void;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] text-text-muted mb-1">{label}</div>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={value ?? ""}
+        placeholder={placeholder}
+        onChange={(e) => {
+          const n = parseInt(e.target.value, 10);
+          onChange(Number.isFinite(n) && n > 0 ? Math.min(n, max) : undefined);
+        }}
+        className="w-full h-8 px-2 rounded-md border border-card-border bg-form-surface text-[11px] focus:outline-none focus:ring-1 focus:ring-gold/50"
+      />
     </div>
   );
 }

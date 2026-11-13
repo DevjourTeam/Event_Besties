@@ -5,7 +5,7 @@ import {
 } from "@/lib/canvas-export";
 import { uploadJPEG, uploadPNG } from "@/lib/cloudinary";
 import { getProductMetafield } from "@/lib/shopify-admin";
-import { isTemplateV2, type TemplateConfig } from "@/lib/types";
+import { isTemplateV2, maxCharsFor, type TemplateConfig } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -73,9 +73,11 @@ async function renderV2(
   for (const f of config.textFields) {
     if (!f.editable) continue;
     const v = body.textValues?.[f.nodeId];
+    // The editor enforces the field's character limit; the server enforces it
+    // too, so a hand-crafted request can't sneak a longer string onto the print.
     textValues[f.nodeId] = (typeof v === "string" ? v : f.value).slice(
       0,
-      MAX_TEXT_LEN
+      Math.min(MAX_TEXT_LEN, maxCharsFor(f))
     );
   }
 
@@ -99,6 +101,7 @@ async function renderV2(
         fontSize: f.fontSize,
         fill: f.fill,
         align: alignOf(f.nodeId, f.editable),
+        maxWidthPct: f.maxWidthPct,
       })),
       textValues,
       colorValues: {},

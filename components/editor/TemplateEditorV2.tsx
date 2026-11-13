@@ -10,7 +10,7 @@ import { fontFaceCss } from "@/lib/custom-fonts";
 import { composeSvg } from "@/lib/svg-template";
 import { fitTextFields, type TextAlign } from "@/lib/svg-fit";
 import { parseSizeCm } from "@/lib/arch-shape";
-import type { TemplateConfig, WithProductImage } from "@/lib/types";
+import { maxCharsFor, type TemplateConfig, type WithProductImage } from "@/lib/types";
 import { useCanvasZoom } from "@/hooks/useCanvasZoom";
 import { ZoomControls } from "./ZoomControls";
 import { TemplateStage, stageSize } from "./TemplateStage";
@@ -190,6 +190,8 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
             nodeId: f.nodeId,
             fontSize: f.fontSize,
             align: alignValues[f.nodeId],
+            fontFamily: f.fontFamily,
+            maxWidthPct: f.maxWidthPct,
           }))
         );
       };
@@ -307,11 +309,18 @@ export function TemplateEditorV2({ config }: { config: V2Config }) {
             <textarea
               rows={Math.min(6, (textValues[f.nodeId] ?? "").split("\n").length || 1)}
               value={textValues[f.nodeId] ?? ""}
+              maxLength={maxCharsFor(f)}
               onChange={(e) =>
-                setTextValues((v) => ({ ...v, [f.nodeId]: e.target.value }))
+                setTextValues((v) => ({
+                  ...v,
+                  [f.nodeId]: e.target.value.slice(0, maxCharsFor(f)),
+                }))
               }
               className="w-full min-h-9 px-3 py-2 rounded-md border border-card-border bg-form-surface text-[13px] leading-snug resize-y focus:outline-none focus:ring-2 focus:ring-gold/40"
             />
+            <div className="mt-0.5 text-right text-[10px] text-text-muted tabular-nums">
+              {(textValues[f.nodeId] ?? "").length}/{maxCharsFor(f)}
+            </div>
 
             <div className="mt-2 flex items-center gap-1">
               <AlignButton
