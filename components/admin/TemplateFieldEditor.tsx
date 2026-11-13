@@ -171,9 +171,10 @@ export function TemplateFieldEditor({
                 </label>
 
                 {f.editable && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 items-end">
                     <NumberSetting
-                      label="Text area width (% of board)"
+                      label="Text width (%)"
+                      hint="Width of this text's area, as a % of the board width. Long text shrinks to fit it."
                       value={f.maxWidthPct}
                       placeholder={`${DEFAULT_AREA_PCT} (default)`}
                       min={10}
@@ -182,6 +183,7 @@ export function TemplateFieldEditor({
                     />
                     <NumberSetting
                       label="Max characters"
+                      hint="Most characters the customer can type in this box."
                       value={f.maxChars}
                       placeholder={`${Math.max(DEFAULT_MAX_CHARS, f.value.length)} (default)`}
                       min={Math.max(1, f.value.length)}
@@ -205,6 +207,7 @@ const DEFAULT_AREA_PCT = 65;
 /** An optional whole-number setting; empty means "use the default". */
 function NumberSetting({
   label,
+  hint,
   value,
   placeholder,
   min,
@@ -212,6 +215,7 @@ function NumberSetting({
   onChange,
 }: {
   label: string;
+  hint: string;
   value: number | undefined;
   placeholder: string;
   min: number;
@@ -219,10 +223,11 @@ function NumberSetting({
   onChange: (v: number | undefined) => void;
 }) {
   return (
-    <div>
-      <div className="text-[10px] text-text-muted mb-1">{label}</div>
+    <div className="min-w-0" title={hint}>
+      <div className="text-[10px] text-text-muted mb-1 truncate">{label}</div>
       <input
         type="number"
+        title={hint}
         inputMode="numeric"
         min={min}
         max={max}
